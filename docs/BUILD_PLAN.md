@@ -25,6 +25,7 @@
 | Council areas | ONS local authority boundaries | Free, official, matches how councils think |
 | Ownership check | Site finder for public land; manual Land Registry title search by admins for other promising sites | Avoids rebuilding land data |
 | Email | Brevo for supporters, synced with consent flags; Gmail for landowner outreach | One list, one place to manage unsubscribes |
+| Sales pipeline | Brevo CRM (Deals module) | Already in the stack for supporter email; deals can link straight to the nominator's contact |
 | Analytics | Cookieless analytics with campaign tags on Facebook links | Measures the funnel without a cookie banner |
 
 ---
@@ -180,6 +181,35 @@ This is the piece to show any landowner before asking about land.
 
 ---
 
+## Sales pipeline (Brevo CRM)
+
+Brevo's Deals module is the system of record for a nomination's status once
+it enters the pipeline — admins work the pipeline in Brevo, not in
+StopSpotter, and StopSpotter only reflects what Brevo says.
+
+- **Pipeline stages** map directly onto the public-safe statuses (Submitted,
+  Under review, Shortlisted, Live, Not suitable), plus private stages for
+  landowner contact/negotiation that never reach StopSpotter users.
+- **Deal creation**: when a nomination passes initial automatic moderation,
+  create a Brevo deal linked to the nominator's Brevo contact (the same
+  contact created at sign-up, consent flags and all).
+- **Landowner-only deals** (e.g. a council-owned site with no linked
+  nominator, or where outreach is the main activity) get a dedicated Brevo
+  contact so the deal has something to attach to — but that contact:
+  - sits in a separate list, excluded from every marketing automation,
+  - has no marketing consent recorded (there's no lawful basis for it),
+  - is never emailed from Brevo — outreach stays in Gmail, per the existing
+    decision.
+- **Sync direction**: a Brevo webhook (deal stage changed) calls a StopSpotter
+  endpoint (a Supabase Edge Function). The function maps the Brevo stage to
+  the public status enum, writes `nominations.status` and a new
+  `status_history` row, and — only for public-safe stages — triggers the
+  existing applicant status email. Private stage changes update nothing
+  user-facing.
+- **No reverse sync**: StopSpotter never writes back to Brevo deal stages;
+  admins move deals forward in Brevo only. This keeps "no manual updates in
+  StopSpotter" true for status.
+
 ## Site finder integration
 
 See `docs/PROJECT_PLAN.md` § Relationship to the site finder for the product
@@ -243,7 +273,11 @@ rationale. Engineering implications:
 | Site list with filters (council area, status, score, flags, vote count) | ⬜ |
 | Exact-location admin map view (satellite, landowner details inline) | ⬜ |
 | Moderation queue (flagged free text + pins + reports) | ⬜ |
-| Status pipeline integration (sales pipeline → public-safe statuses → automatic email) — **blocked on open question: which pipeline tool** | ⬜ |
+| Confirm Brevo plan includes the Deals (CRM) module; set up pipeline with public-safe + private stages | ⬜ |
+| Auto-create a Brevo deal (linked to the nominator's contact) when a nomination passes initial moderation | ⬜ |
+| Non-marketing Brevo contact path for landowner-only deals (separate list, no marketing consent, excluded from automations) | ⬜ |
+| Supabase Edge Function: receive Brevo deal-stage webhook, map to public status enum, write `nominations.status` + `status_history` | ⬜ |
+| Trigger the applicant status email only on public-safe stage changes | ⬜ |
 | Brevo sync for opted-in supporters, consent-flag aware | ⬜ |
 | Demand report generator (PDF + CSV), per site or per council area | ⬜ |
 | Site finder integration: shared targets table / sync job, "Suggested by AireStop" markers, 200m merge matching, combined priority score | ⬜ |

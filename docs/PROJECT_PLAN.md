@@ -168,12 +168,13 @@ target sites, so every lead has a single record whichever tool found it:
 | Moderation | Jamie has very limited time, so moderation is automatic by default; only flagged items are reviewed |
 | Status updates | Synced automatically from the sales pipeline; anything not automated stays private |
 | Email | Brevo for supporter marketing; Gmail for landowner outreach |
+| Sales pipeline | **Brevo CRM (Deals module)** — reuses the existing Brevo account rather than adding a new tool. Deals carry the pipeline stages; Brevo is the system of record for status, and a webhook pushes stage changes into StopSpotter. Landowner-only deals get a non-marketing Brevo contact (separate list, excluded from all marketing automations); outreach still happens from Gmail, not Brevo email. |
 | Site finder | Works in tandem with StopSpotter on one shared target list |
 | Local voters | Not separated out — the aim is attracting visitor spend, and locals rarely use aires |
 
 ## Open questions
 
-- [ ] Which sales pipeline tool will drive status updates, and can it sync with StopSpotter?
+- [ ] Confirm the Brevo plan/tier includes the Deals (CRM) module and enough API quota for stage-change webhooks.
 - [ ] How many site finder suggestions to release per area at launch?
 - [ ] Are the eight-week targets right for the size of the current Facebook audience?
 - [ ] Legal review of consent wording, handling of landowner details, and the line between supporter and investment communications.
