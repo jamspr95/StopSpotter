@@ -111,7 +111,7 @@ strongest candidate for version two, once moderation capacity is clear.
 
 | Task | Status |
 |---|---|
-| See `docs/BUILD_PLAN.md` § Milestone 1 for engineering tasks | ⬜ |
+| See `docs/BUILD_PLAN.md` § Milestone 1 for engineering tasks | 🔄 App built and click-tested end-to-end; postcode search still a stub |
 | Run informal usability pass with 5–10 supporters | ⬜ |
 
 ### Milestone 2 — Core build

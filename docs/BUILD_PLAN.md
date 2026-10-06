@@ -236,12 +236,12 @@ rationale. Engineering implications:
 
 | Task | Status |
 |---|---|
-| Set up web app scaffold (mobile-first, single app, no native) | ⬜ |
-| Integrate MapLibre/Leaflet with OSM tiles + satellite layer toggle | ⬜ |
-| Drop-pin flow: crosshair pin, place/postcode search | ⬜ |
-| Nomination form UI: 8 questions, one per screen on mobile, progress bar | ⬜ |
-| Sign-up UI: email, optional name, two unticked consent checkboxes, "submit without email" link | ⬜ |
-| Wire prototype end-to-end (no real persistence required yet) | ⬜ |
+| Set up web app scaffold (mobile-first, single app, no native) | ✅ Vite + React + TypeScript |
+| Integrate MapLibre/Leaflet with OSM tiles + satellite layer toggle | ✅ Leaflet; satellite via Esri World Imagery |
+| Drop-pin flow: crosshair pin, place/postcode search | 🔄 Crosshair + "use my location" done; postcode/place search is a visible stub (needs a geocoding API — defer to Milestone 2) |
+| Nomination form UI: 8 questions, one per screen on mobile, progress bar | ✅ Incl. landowner follow-up and criteria scoring |
+| Sign-up UI: email, optional name, two unticked consent checkboxes, "submit without email" link | ✅ Magic-link step simulated (no real email send yet — Milestone 2) |
+| Wire prototype end-to-end (no real persistence required yet) | ✅ Zustand store, persisted to localStorage for continuity across test sessions |
 | Test with 5–10 existing supporters on their phones; capture friction points | ⬜ |
 
 ### Milestone 2 — Core build
