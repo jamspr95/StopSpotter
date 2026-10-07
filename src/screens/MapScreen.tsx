@@ -66,22 +66,20 @@ export function MapScreen() {
           ))}
         </MapContainer>
 
-        {/* Brand mark, centred at the top of the map and stacked above the
-            toggle/badge row below it. On a white chip in its natural
-            navy-on-transparent form, matching the toggle/badge pills'
-            own white-chip treatment — a forced-white filter was tried
-            first (brightness-0 + invert), but that flattens every colour
-            in the source artwork to one solid silhouette, which made the
-            "Aire" lettering disappear into the rest of the mark rather
-            than reading as separate letters. A white backdrop means the
-            logo's real navy reads correctly without any filter trick.
-            Width is fixed from the source's documented 155:25 aspect
-            ratio rather than left to load-time intrinsic sizing, so
-            layout doesn't shift/collapse if the external SVG is slow or
-            fails to load. */}
-        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 shadow-sm">
-          <img src="https://airestop.co.uk/logo.svg" alt="AireStop" className="h-5 w-[124px]" />
-        </div>
+        {/* Brand mark, centred directly on the map (no card/pill behind it)
+            and stacked above the toggle/badge row below it. brightness-0
+            + invert forces every opaque pixel in the source artwork to
+            white so it reads on both tile layers; it does not touch the
+            alpha channel, so if "Aire" is a genuine cutout in the source
+            SVG it stays see-through to the map underneath. Width is fixed
+            from the source's documented 155:25 aspect ratio rather than
+            left to load-time intrinsic sizing, so layout doesn't shift/
+            collapse if the external SVG is slow or fails to load. */}
+        <img
+          src="https://airestop.co.uk/logo.svg"
+          alt="AireStop"
+          className="absolute left-1/2 top-3 z-10 h-6 w-[149px] -translate-x-1/2 brightness-0 invert drop-shadow"
+        />
 
         <div className="absolute left-3 top-[60px] z-10">
           <SatelliteToggle satellite={satellite} onChange={setSatellite} />

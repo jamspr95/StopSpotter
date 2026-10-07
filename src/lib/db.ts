@@ -406,6 +406,14 @@ export async function insertModerationReport(nominationId: string, reason: strin
   if (error) throw error
 }
 
+/** Support page's quick "help us grow" form — see 0006_growth_feedback.sql. */
+export async function insertGrowthFeedback(options: string[], message: string | null): Promise<void> {
+  const { error } = await client()
+    .from('growth_feedback')
+    .insert({ options, message })
+  if (error) throw error
+}
+
 // ── Admin (Milestone 3) ──────────────────────────────────────────────────
 // Everything below only works for a signed-in user present in the
 // `admins` table (supabase/migrations/0002_admin.sql) — every RPC checks
