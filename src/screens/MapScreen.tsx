@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Circle, MapContainer, Popup, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { MAP_CENTRE, SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED } from '../data/seed'
@@ -57,19 +57,22 @@ export function MapScreen() {
       >
         <MapTiles satellite={satellite} />
         <ViewportTracker onMove={(centre, zoom) => { viewRef.current = { centre, zoom } }} />
-        {/* A circle, not a pin — the public location is already fuzzed to a
-            ~1km grid (snapToPublicGrid, src/lib/geo.ts) to keep the real
-            spot private, and a precise-looking pin marker at an imprecise
-            point reads as "the stop is right here" when it isn't. A ring
-            of uncertainty around the snapped point is honest about that:
-            the real stop is somewhere in this area, not at its centre. */}
+        {/* Both together: the pin is what you actually spot and tap at any
+            zoom (a 600m-radius circle is near-invisible zoomed out), while
+            the circle around it is honest about precision — the public
+            location is fuzzed to a ~1km grid (snapToPublicGrid,
+            src/lib/geo.ts) to keep the real spot private, so zooming in
+            shows the pin sitting inside an area, not at one exact point. */}
         {nominations.map((n) => (
           <Circle
-            key={n.id}
+            key={`${n.id}-zone`}
             center={n.public}
             radius={PUBLIC_FUZZ_RADIUS_M}
-            pathOptions={{ color: '#10385a', weight: 2, fillColor: '#10385a', fillOpacity: 0.2 }}
-          >
+            pathOptions={{ color: '#10385a', weight: 2, fillColor: '#10385a', fillOpacity: 0.15 }}
+          />
+        ))}
+        {nominations.map((n) => (
+          <Marker key={n.id} position={n.public}>
             <Popup>
               <div className="text-sm">
                 <p className="mb-2 font-medium">
@@ -84,7 +87,7 @@ export function MapScreen() {
                 </button>
               </div>
             </Popup>
-          </Circle>
+          </Marker>
         ))}
       </MapContainer>
 
