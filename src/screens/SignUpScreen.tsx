@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
 import type { SSOProvider } from '../lib/db'
+import { isDisposableEmail } from '../lib/disposableEmail'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 
@@ -55,7 +56,9 @@ export function SignUpScreen() {
   if (!pendingFlow) return null
 
   const isNomination = pendingFlow.type === 'nomination'
-  const emailValid = /\S+@\S+\.\S+/.test(email)
+  const emailFormatValid = /\S+@\S+\.\S+/.test(email)
+  const emailIsDisposable = emailFormatValid && isDisposableEmail(email)
+  const emailValid = emailFormatValid && !emailIsDisposable
 
   async function handleSendLink() {
     setSubmitting(true)
@@ -180,6 +183,12 @@ export function SignUpScreen() {
           placeholder="you@example.com"
           className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-base"
         />
+        {emailIsDisposable && (
+          <p className="mt-1 text-xs text-red-600">
+            That looks like a temporary/disposable email address — please use one you can
+            actually receive mail at.
+          </p>
+        )}
 
         <label className="mt-4 block text-sm font-medium text-slate-700">
           First name (optional)

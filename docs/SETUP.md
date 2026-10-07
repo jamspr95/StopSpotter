@@ -267,3 +267,27 @@ shape right and verify it actually works — that's an external-account
 dependency this environment can't satisfy, not a decision to skip it.
 Same for syncing opted-in supporters to Brevo's marketing lists. Both stay
 on the Milestone 3 checklist in `docs/BUILD_PLAN.md` as open.
+
+## 11. Enable the disposable-email sign-up block
+
+[`supabase/migrations/0005_disposable_email.sql`](../supabase/migrations/0005_disposable_email.sql)
+adds a `disposable_email_domains` table and a `hook_reject_disposable_email`
+Postgres function, but Supabase Auth doesn't call it until you point a
+"Before User Created" hook at it — a one-time dashboard toggle:
+
+1. **Dashboard → Authentication → Hooks → Before User Created.**
+2. Choose **Postgres Function**, then select `hook_reject_disposable_email`.
+3. Save.
+
+That's it — no redeploy, no edge function. It covers every sign-up path
+(magic link and every SSO provider you've configured), since it runs
+inside Supabase Auth itself before the user row exists. Nothing breaks by
+skipping this step; sign-ups from a disposable address just aren't
+blocked server-side yet (the sign-up form's own client-side check in
+`src/lib/disposableEmail.ts` still catches the common cases, but that one
+a determined actor can route around by calling the API directly).
+
+To add more blocked domains later, just insert more rows:
+```sql
+insert into public.disposable_email_domains (domain) values ('example-temp-mail.com');
+```
