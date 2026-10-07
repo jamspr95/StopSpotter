@@ -88,8 +88,16 @@ interface AppState {
   /** Id of the nomination/vote just created, awaiting the simulated magic-link click (local-only mode only). */
   awaitingVerificationId: string | null
   awaitingVerificationKind: 'nomination' | 'vote' | null
-  /** Real-backend mode only: true once sendMagicLink() has been called, until completePendingSignIn() runs. */
-  awaitingMagicLink: boolean
+  /**
+   * Real-backend mode only: which auth flow is in flight, until
+   * completePendingSignIn() runs and clears it back to null.
+   * 'magic_link' drives the "check your email" interim screen; 'oauth'
+   * doesn't need one (the browser already left the page for the
+   * provider's consent screen) but still needs a signal so the screen
+   * that remounts after the redirect knows a sign-in was in progress and
+   * should navigate to /done once it completes.
+   */
+  authMethod: 'magic_link' | 'oauth' | null
   /** True once initRealBackend()'s first fetch has resolved — screens can use this to show a loading state instead of an empty map. */
   backendReady: boolean
 
@@ -111,6 +119,19 @@ interface AppState {
   finalizePendingFlow: (identity: Identity) => Promise<void>
   /** Local-only mode's simulated magic-link click. */
   confirmMagicLink: () => void
+  /**
+   * Real-backend mode only — there's no local-only equivalent (SSO
+   * inherently needs a real provider + backend), so SignUpScreen simply
+   * doesn't render these buttons when isSupabaseConfigured is false.
+   * Consent choices are captured now (before the browser navigates away)
+   * since pendingIdentity is all completePendingSignIn will have to work
+   * with on return — the email itself comes from the provider via the
+   * resulting session instead of from here.
+   */
+  signInWithSSO: (
+    provider: db.SSOProvider,
+    consent: { firstName?: string; news: boolean; support: boolean },
+  ) => Promise<void>
   /** Real-backend mode only: fetches the live nominations/votes feed and wires up auth. Call once at startup. */
   initRealBackend: () => Promise<void>
 }
@@ -226,7 +247,7 @@ async function completePendingSignIn(
     currentUser: { id: userId, email, firstName: pendingIdentity.firstName, verified: true, consents },
     pendingFlow: null,
     pendingIdentity: null,
-    awaitingMagicLink: false,
+    authMethod: null,
   })
 }
 
@@ -241,7 +262,7 @@ export const useAppStore = create<AppState>()(
       pendingIdentity: null,
       awaitingVerificationId: null,
       awaitingVerificationKind: null,
-      awaitingMagicLink: false,
+      authMethod: null,
       backendReady: !isSupabaseConfigured,
 
       markIntroSeen: () => set({ hasSeenIntro: true }),
@@ -312,7 +333,7 @@ export const useAppStore = create<AppState>()(
           } else {
             // Nothing is written yet — see pendingIdentity's doc comment.
             await db.sendMagicLink(identity.email!)
-            set({ pendingIdentity: identity, awaitingMagicLink: true })
+            set({ pendingIdentity: identity, authMethod: 'magic_link' })
           }
           return
         }
@@ -411,35 +432,73 @@ export const useAppStore = create<AppState>()(
         set({ pendingFlow: null, awaitingVerificationId: null, awaitingVerificationKind: null })
       },
 
+      signInWithSSO: async (provider, consent) => {
+        if (!isSupabaseConfigured || !get().pendingFlow) return
+        // Set before calling signInWithOAuth, which navigates the browser
+        // away almost immediately — anything set after that call might
+        // never actually run.
+        set({
+          pendingIdentity: { email: null, firstName: consent.firstName, news: consent.news, support: consent.support },
+          authMethod: 'oauth',
+        })
+        await db.signInWithOAuth(provider)
+      },
+
       initRealBackend: async () => {
         if (!isSupabaseConfigured) return
 
-        const [nominations, votes] = await Promise.all([
-          db.fetchPublicNominations(),
-          db.fetchPublicVotes(),
-        ])
-        set({ nominations, votes, backendReady: true })
+        // Each step below is independently try/caught: a Supabase outage,
+        // bad credentials, or any transient network failure must not leave
+        // the map stuck on "Loading…" forever (backendReady would never
+        // flip true) or prevent the auth listener — by far the most
+        // important part, since every future sign-in depends on it — from
+        // ever being set up. Found by actually testing a broken-backend
+        // scenario, not assumed.
+        try {
+          const [nominations, votes] = await Promise.all([
+            db.fetchPublicNominations(),
+            db.fetchPublicVotes(),
+          ])
+          set({ nominations, votes })
+        } catch (err) {
+          console.error('StopSpotter: failed to load the live nominations/votes feed.', err)
+        } finally {
+          set({ backendReady: true })
+        }
 
         const finishSignIn = async (user: { id: string; email?: string }) => {
           if (!user.email) return
-          const hadPending = get().pendingFlow && get().pendingIdentity
-          if (hadPending) {
-            await completePendingSignIn(get, set, user.id, user.email)
-          } else {
-            set({ currentUser: { id: user.id, email: user.email, verified: true, consents: [] } })
+          try {
+            const hadPending = get().pendingFlow && get().pendingIdentity
+            if (hadPending) {
+              await completePendingSignIn(get, set, user.id, user.email)
+            } else {
+              set({ currentUser: { id: user.id, email: user.email, verified: true, consents: [] } })
+            }
+            const [myNominations, myVotes] = await Promise.all([
+              db.fetchMyNominations(user.id),
+              db.fetchMyVotes(user.id),
+            ])
+            set((s) => ({
+              nominations: mergeById(s.nominations, myNominations),
+              votes: mergeById(s.votes, myVotes),
+            }))
+          } catch (err) {
+            // A failure here (e.g. partway through completePendingSignIn)
+            // currently just leaves the user on whatever screen they were
+            // on with pendingFlow still set, rather than silently losing
+            // their draft — not a full retry/error UI yet, but not a
+            // crash or a data loss either. Worth revisiting.
+            console.error('StopSpotter: failed to complete sign-in.', err)
           }
-          const [myNominations, myVotes] = await Promise.all([
-            db.fetchMyNominations(user.id),
-            db.fetchMyVotes(user.id),
-          ])
-          set((s) => ({
-            nominations: mergeById(s.nominations, myNominations),
-            votes: mergeById(s.votes, myVotes),
-          }))
         }
 
-        const existingUser = await db.getCurrentSessionUser()
-        if (existingUser) await finishSignIn(existingUser)
+        try {
+          const existingUser = await db.getCurrentSessionUser()
+          if (existingUser) await finishSignIn(existingUser)
+        } catch (err) {
+          console.error('StopSpotter: failed to check for an existing session.', err)
+        }
 
         db.onAuthStateChange((user) => {
           if (user) void finishSignIn(user)
@@ -456,7 +515,7 @@ export const useAppStore = create<AppState>()(
         currentUser: state.currentUser,
         pendingFlow: state.pendingFlow,
         pendingIdentity: state.pendingIdentity,
-        awaitingMagicLink: state.awaitingMagicLink,
+        authMethod: state.authMethod,
         ...(isSupabaseConfigured ? {} : { nominations: state.nominations, votes: state.votes }),
       }),
     },

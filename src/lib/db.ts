@@ -42,6 +42,27 @@ export async function sendMagicLink(email: string): Promise<void> {
   if (error) throw error
 }
 
+export type SSOProvider = 'google' | 'apple' | 'facebook'
+
+/**
+ * Same "nothing is written until the redirect comes back with a session"
+ * shape as sendMagicLink, but the browser leaves the page immediately
+ * (full navigation to the provider's consent screen) rather than waiting
+ * for an email click — supabase-js's signInWithOAuth does that navigation
+ * itself, so there's nothing meaningful to await after it resolves.
+ * Provider setup (OAuth app + redirect URI on each provider's own
+ * developer console, then the client ID/secret into the Supabase
+ * dashboard) is external — see docs/SETUP.md.
+ */
+export async function signInWithOAuth(provider: SSOProvider): Promise<void> {
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}spot/signup`
+  const { error } = await client().auth.signInWithOAuth({
+    provider,
+    options: { redirectTo },
+  })
+  if (error) throw error
+}
+
 export async function getCurrentSessionUser(): Promise<User | null> {
   const {
     data: { session },

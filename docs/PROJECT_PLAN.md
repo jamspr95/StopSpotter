@@ -85,8 +85,8 @@ These are proposed starting points to validate, not commitments.
 
 ### Out of scope for the MVP
 Photos, comments and discussion, leaderboards or badges, a separate landowner
-portal, in-app payments, a native app, and Facebook login. Photos are the
-strongest candidate for version two, once moderation capacity is clear.
+portal, in-app payments, and a native app. Photos are the strongest
+candidate for version two, once moderation capacity is clear.
 
 ---
 
@@ -173,6 +173,7 @@ target stops, so every lead has a single record whichever tool found it:
 | Local voters | Not separated out — the aim is attracting visitor spend, and locals rarely use aires |
 | Support screen phasing | At launch, no crowdfunder exists yet, so the Support screen's primary ask is "Spot a stop", not backing AireStop. Supporter tier/crowdfunder links come back once the crowdfunder launches — the screen keeps a "Coming soon" note in the meantime rather than a dead CTA. |
 | Terminology: Stop, not Site | A nominated place is a **stop**, not a "site" — matches how motorhomers actually talk about aires. "Spot" stays a verb only (the act of finding/nominating — "spot a stop"), never a noun for the place itself. Applied throughout the app's UI text and routes (`/stop/:id`, `/my-stops`); "site finder" is unaffected, since that's the name of AireStop's separate land-finding tool, not this usage. |
+| Sign-in: Google/Apple/Facebook SSO | Added alongside email magic-link, not instead of it — removes the earlier MVP exclusion of Facebook login. All three sign in through Supabase Auth (`signInWithOAuth`); buttons only appear once a real backend is configured (`docs/SETUP.md` §6), and each provider still needs its own external setup (Google ~10 min/free, Facebook needs Meta App Review before public use, Apple needs a $99/year Developer account) before it actually works end to end. |
 
 ## Open questions
 

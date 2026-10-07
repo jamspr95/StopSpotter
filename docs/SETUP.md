@@ -88,7 +88,75 @@ of supporters, but if sign-ups stall or emails don't arrive, check
 provider (**Authentication → Settings → SMTP Settings**) before a wider
 launch.
 
-## 6. Load council boundaries (optional — can come later)
+## 6. Set up Google, Apple and Facebook sign-in (optional)
+
+The app shows "Continue with Google / Apple / Facebook" buttons on the
+sign-up screen whenever a backend is configured (step 4) — but each
+provider only actually works once you've enabled it in Supabase and set
+it up with that provider. Nothing breaks by skipping some or all of these:
+a provider that isn't enabled just shows an error if someone taps its
+button, and email magic-link keeps working regardless.
+
+All three use the same Supabase-side redirect URL, which you'll enter on
+the provider's side as the "authorised redirect URI":
+
+```
+https://xxxxx.supabase.co/auth/v1/callback
+```
+
+(Find your own project's version of this on the provider setup page in
+the dashboard: **Authentication → Providers → Google/Apple/Facebook** —
+Supabase shows it there pre-filled with your project ref.)
+
+### Google (easiest — ~10 minutes, free)
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create
+   a project (or use an existing one) and go to **APIs & Services →
+   Credentials**.
+2. **Create Credentials → OAuth client ID** → Application type **Web
+   application**.
+3. Under **Authorised redirect URIs**, add the Supabase callback URL above.
+4. Copy the generated **Client ID** and **Client secret**.
+5. In Supabase: **Authentication → Providers → Google**, toggle it on,
+   paste both values, save.
+
+### Facebook / Meta (needs App Review for a public launch)
+
+1. In [Meta for Developers](https://developers.facebook.com/), create an
+   app (type **Consumer**) and add the **Facebook Login** product.
+2. Under **Facebook Login → Settings**, add the Supabase callback URL
+   above to **Valid OAuth Redirect URIs**.
+3. Copy the **App ID** and **App Secret** from **Settings → Basic**.
+4. In Supabase: **Authentication → Providers → Facebook**, toggle it on,
+   paste both values, save.
+5. While the app is in **Development mode**, sign-in only works for
+   accounts added as testers/developers on the Meta app. Going live to the
+   public requires submitting for **App Review** (the `public_profile` and
+   `email` permissions are usually pre-approved, but Meta still has to
+   review the app itself) — budget a few days for this before relying on
+   it for a real launch.
+
+### Apple (needs a paid Apple Developer account)
+
+1. Requires an active [Apple Developer Program](https://developer.apple.com/programs/)
+   membership ($99/year) — there's no free tier for Sign in with Apple.
+2. In the Apple Developer portal: create an **App ID** (with "Sign in with
+   Apple" capability enabled), a **Services ID** (this is the "client ID"
+   Supabase asks for — it's a separate identifier from the App ID), and a
+   **Sign in with Apple** private key.
+3. On the Services ID's configuration, add this project's **domain**
+   (`jamspr95.github.io`, or a custom domain later) and the Supabase
+   callback URL above as the return URL.
+4. Apple also requires **domain verification** — a small file served from
+   `.well-known/` on that domain, which the Apple portal walks you through.
+5. In Supabase: **Authentication → Providers → Apple**, toggle it on,
+   enter the Services ID, Team ID, Key ID, and the private key contents.
+
+Because of the cost and setup time, Apple sign-in is the one most likely
+to be left for later — the Google and email options are enough to launch
+with.
+
+## 7. Load council boundaries (optional — can come later)
 
 The `council_boundaries` table and `council_area_for_point()` function are
 already in the schema, but the table starts empty — the app falls back to
@@ -105,7 +173,7 @@ To load it:
 3. No code or RLS changes needed afterwards — `council_area_for_point()`
    starts returning real names the moment the table has rows.
 
-## 7. Verify it's working
+## 8. Verify it's working
 
 After steps 1–5:
 1. Visit the deployed site and open the browser console — there should be

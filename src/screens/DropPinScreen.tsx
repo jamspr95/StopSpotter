@@ -61,6 +61,10 @@ export function DropPinScreen() {
           navigate('/vote', { state: { duplicateNotice: true } })
           return
         }
+      } catch (err) {
+        // Fail open: if the duplicate check can't reach the backend, let the
+        // user proceed to nominate rather than get stuck on this screen.
+        console.error('StopSpotter: duplicate-pin check failed.', err)
       } finally {
         setChecking(false)
       }
