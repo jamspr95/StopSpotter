@@ -392,6 +392,17 @@ export async function findNearbyNomination(
   return row ? { id: row.id, placeType: row.place_type, status: row.status } : null
 }
 
+/**
+ * Attaches the signed-in user to a nomination that was already auto-saved
+ * anonymously (see useAppStore's ensureNominationSaved) — nominations have
+ * no UPDATE policy for anon/authenticated, so this has to go through the
+ * claim_nomination RPC. No-ops server-side if already claimed.
+ */
+export async function claimNomination(nominationId: string): Promise<void> {
+  const { error } = await client().rpc('claim_nomination', { p_nomination_id: nominationId })
+  if (error) throw error
+}
+
 /** Null until council_boundaries is loaded — see docs/SETUP.md. */
 export async function councilAreaForPoint(point: LatLng): Promise<string | null> {
   const { data, error } = await client().rpc('council_area_for_point', { pt: toWKT(point) })

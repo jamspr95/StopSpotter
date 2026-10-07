@@ -73,18 +73,6 @@ export function SignUpScreen() {
     }
   }
 
-  async function handleSubmitWithoutEmail() {
-    setSubmitting(true)
-    setError(null)
-    try {
-      await finalizePendingFlow({ email: null, news: false, support: false })
-      navigate('/done', { state: { flowType: 'nomination' } })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong — please try again.')
-      setSubmitting(false)
-    }
-  }
-
   async function handleSSO(provider: SSOProvider) {
     setSubmitting(true)
     setError(null)
@@ -204,7 +192,9 @@ export function SignUpScreen() {
         <p className="mt-5 text-sm text-slate-600">
           {isGrowthFeedback
             ? "We'll use your email to sign you in, check you're genuine, and get back to you about this."
-            : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
+            : isNomination
+              ? "Your stop's already noted — we'll use your email to sign you in, check it's genuine, and tell you what happens to it."
+              : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
         </p>
 
         <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
@@ -238,17 +228,6 @@ export function SignUpScreen() {
         >
           {submitting ? 'Sending…' : 'Send my link'}
         </button>
-
-        {isNomination && (
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={handleSubmitWithoutEmail}
-            className="mt-3 w-full text-center text-sm font-medium text-slate-500 underline disabled:opacity-40"
-          >
-            Submit without email
-          </button>
-        )}
 
         {isSupabaseConfigured && (
           <p className="mt-6 text-center text-xs text-slate-400">Connected to the live backend.</p>

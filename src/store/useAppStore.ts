@@ -47,6 +47,8 @@ export interface DraftNomination {
     happyToBeContacted?: boolean
   }
   payBand?: PayBand
+  /** Id of the row ensureNominationSaved already wrote this draft as — see its doc comment. */
+  savedId?: string
 }
 
 interface DraftVote {
@@ -111,19 +113,20 @@ interface AppState {
   markIntroSeen: () => void
   beginNomination: (pin: LatLng) => void
   updateNominationDraft: (patch: Partial<DraftNomination>) => void
+  /** Writes the nomination draft immediately, before SignUpScreen asks for an email — see ensureNominationSaved. */
+  saveNominationDraft: () => Promise<void>
   beginVote: (nominationId: string) => void
   updateVoteDraft: (patch: Partial<DraftVote>) => void
   /** Support page quick options: starts the same email-capture flow nomination/vote use, so there's someone to follow up with. */
   beginGrowthFeedback: (options: string[], message?: string) => void
   cancelPendingFlow: () => void
   /**
-   * Local-only mode: creates the nomination/vote record immediately.
-   * Anonymous (email === null) records are saved right away as unverified;
-   * email-backed ones wait for confirmMagicLink().
-   * Real-backend mode: anonymous nominations are written immediately (no
-   * email to wait for, matches the local-only behaviour); email-backed
-   * flows call Supabase's real sendMagicLink() and wait for the redirect —
-   * see pendingIdentity above.
+   * Starts the email-capture step for whatever's pending. Nominations are
+   * already saved by this point (see saveNominationDraft) — this just
+   * requests the magic link (real-backend mode) or records the local
+   * identity and waits for confirmMagicLink (local-only mode); votes and
+   * growth feedback were never written before this point and still aren't,
+   * until the email is confirmed.
    */
   finalizePendingFlow: (identity: Identity) => Promise<void>
   /** Local-only mode's simulated magic-link click. */
@@ -190,6 +193,65 @@ function nominationFromDraft(
   }
 }
 
+type NominationFlow = Extract<PendingFlow, { type: 'nomination' }>
+
+/**
+ * Writes the nomination this draft hasn't been saved as yet (anonymous,
+ * unverified) and returns its id — idempotent, since it just returns
+ * draft.savedId once that's set. Called the moment NominationFormScreen's
+ * question flow finishes, before SignUpScreen ever asks for an email, so a
+ * nomination is never lost to someone abandoning at that step; also called
+ * (as a fallback) from completePendingSignIn, in case that first save
+ * never happened. Supabase mode writes the real row; local-only mode
+ * appends to the in-memory list — either way the (unverified) Nomination
+ * goes into state immediately, same as the old "submit without email" path
+ * did, just unconditionally now rather than behind that button.
+ */
+async function ensureNominationSaved(
+  flow: NominationFlow,
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+): Promise<string> {
+  if (flow.draft.savedId) return flow.draft.savedId
+  const draft = flow.draft
+
+  let id: string
+  let councilArea: string
+  if (isSupabaseConfigured) {
+    councilArea = await resolveCouncilArea(draft.pin)
+    id = await db.insertNomination({
+      userId: null,
+      exact: draft.pin,
+      public: snapToPublicGrid(draft.pin),
+      councilArea,
+      answers: draft.answers as NominationAnswers,
+      whyHere: draft.whyHere,
+      payBand: draft.payBand ?? 'free_only',
+      criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
+      criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
+      ownershipHint:
+        draft.answers.ownerType === 'i_own_it'
+          ? 'Nominator says they own this stop'
+          : 'No ownership hint yet (site finder check runs in Milestone 2)',
+      landowner: draft.landowner,
+    })
+  } else {
+    councilArea = guessCouncilArea(draft.pin)
+    id = `nom-${crypto.randomUUID()}`
+  }
+
+  const nomination = nominationFromDraft(id, null, draft, false, councilArea)
+  const currentFlow = get().pendingFlow
+  set({
+    nominations: [...get().nominations, nomination],
+    pendingFlow:
+      currentFlow?.type === 'nomination'
+        ? { type: 'nomination', draft: { ...currentFlow.draft, savedId: id } }
+        : currentFlow,
+  })
+  return id
+}
+
 /** Real-backend mode: writes whatever's in pendingFlow/pendingIdentity now that a session exists. Called from initRealBackend's auth listener. */
 async function completePendingSignIn(
   get: () => AppState,
@@ -205,26 +267,17 @@ async function completePendingSignIn(
   await db.insertConsents(userId, consents)
 
   if (pendingFlow.type === 'nomination') {
-    const draft = pendingFlow.draft
-    const councilArea = await resolveCouncilArea(draft.pin)
-    const id = await db.insertNomination({
-      userId,
-      exact: draft.pin,
-      public: snapToPublicGrid(draft.pin),
-      councilArea,
-      answers: draft.answers as NominationAnswers,
-      whyHere: draft.whyHere,
-      payBand: draft.payBand ?? 'free_only',
-      criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
-      criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
-      ownershipHint:
-        draft.answers.ownerType === 'i_own_it'
-          ? 'Nominator says they own this stop'
-          : 'No ownership hint yet (site finder check runs in Milestone 2)',
-      landowner: draft.landowner,
+    // Normally already saved (anonymous) by ensureNominationSaved before
+    // this screen was ever reached — this call is then a no-op that just
+    // returns that id. The insert only actually happens here as a
+    // fallback, if that first save never completed.
+    const savedId = await ensureNominationSaved(pendingFlow, get, set)
+    await db.claimNomination(savedId)
+    set({
+      nominations: get().nominations.map((n) =>
+        n.id === savedId ? { ...n, userId, verified: true } : n,
+      ),
     })
-    const nomination = nominationFromDraft(id, userId, draft, true, councilArea)
-    set({ nominations: [...get().nominations, nomination] })
   } else if (pendingFlow.type === 'vote') {
     const draft = pendingFlow.draft
     const voteId = await db.insertVote({
@@ -310,6 +363,21 @@ export const useAppStore = create<AppState>()(
       beginGrowthFeedback: (options, message) =>
         set({ pendingFlow: { type: 'growth_feedback', draft: { options, message } } }),
 
+      saveNominationDraft: async () => {
+        const flow = get().pendingFlow
+        if (flow?.type !== 'nomination') return
+        try {
+          await ensureNominationSaved(flow, get, set)
+        } catch (err) {
+          // Best-effort — if this fails (e.g. a network blip), the draft
+          // just isn't saved yet; finalizePendingFlow/completePendingSignIn
+          // each call ensureNominationSaved too, so it's retried once the
+          // user actually confirms an email, rather than blocking them from
+          // moving on to that step.
+          console.error('StopSpotter: auto-save of nomination draft failed.', err)
+        }
+      },
+
       cancelPendingFlow: () => set({ pendingFlow: null, pendingIdentity: null }),
 
       finalizePendingFlow: async (identity) => {
@@ -317,84 +385,39 @@ export const useAppStore = create<AppState>()(
         const flow = state.pendingFlow
         if (!flow) return
 
-        const anonymous = identity.email === null
-
         if (isSupabaseConfigured) {
-          if (anonymous) {
-            // Only nominations support "submit without email" — votes always
-            // require a verified email (docs/BUILD_PLAN.md anti-gaming), and
-            // the UI never offers this button on the vote flow.
-            if (flow.type !== 'nomination') return
-            const draft = flow.draft
-            const councilArea = await resolveCouncilArea(draft.pin)
-            const id = await db.insertNomination({
-              userId: null,
-              exact: draft.pin,
-              public: snapToPublicGrid(draft.pin),
-              councilArea,
-              answers: draft.answers as NominationAnswers,
-              whyHere: draft.whyHere,
-              payBand: draft.payBand ?? 'free_only',
-              criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
-              criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
-              ownershipHint:
-                draft.answers.ownerType === 'i_own_it'
-                  ? 'Nominator says they own this stop'
-                  : 'No ownership hint yet (site finder check runs in Milestone 2)',
-              landowner: draft.landowner,
-            })
-            const nomination = nominationFromDraft(id, null, draft, false, councilArea)
-            set({ nominations: [...get().nominations, nomination], pendingFlow: null })
-          } else {
-            // Nothing is written yet — see pendingIdentity's doc comment.
-            await db.sendMagicLink(identity.email!)
-            set({ pendingIdentity: identity, authMethod: 'magic_link' })
-          }
+          // Nothing is written here for any flow type — a nomination was
+          // already saved by saveNominationDraft before this screen was
+          // ever reached; votes and growth feedback wait for
+          // completePendingSignIn, same as before.
+          await db.sendMagicLink(identity.email!)
+          set({ pendingIdentity: identity, authMethod: 'magic_link' })
           return
         }
 
-        // ── Local-only mode (unchanged from Milestone 1) ──────────────────
-        let userId: string | null = null
-        if (!anonymous) {
-          const existing = state.currentUser
-          const id = existing?.id ?? `user-${crypto.randomUUID()}`
-          userId = id
-          set({
-            currentUser: {
-              id,
-              email: identity.email,
-              firstName: identity.firstName,
-              verified: existing?.verified ?? false,
-              consents: buildConsents(identity),
-            },
-          })
-        }
+        // ── Local-only mode ─────────────────────────────────────────────
+        const existing = state.currentUser
+        const userId = existing?.id ?? `user-${crypto.randomUUID()}`
+        set({
+          currentUser: {
+            id: userId,
+            email: identity.email,
+            firstName: identity.firstName,
+            verified: existing?.verified ?? false,
+            consents: buildConsents(identity),
+          },
+        })
 
         if (flow.type === 'nomination') {
-          const nomination = nominationFromDraft(
-            `nom-${crypto.randomUUID()}`,
-            userId,
-            flow.draft,
-            false,
-            guessCouncilArea(flow.draft.pin),
-          )
-          set((s) => ({ nominations: [...s.nominations, nomination] }))
-
-          if (anonymous) {
-            // Anonymous nominations stay unverified permanently in this prototype —
-            // there's no email to confirm. They're still saved as stop data.
-            set({ pendingFlow: null })
-          } else {
-            set({
-              awaitingVerificationId: nomination.id,
-              awaitingVerificationKind: 'nomination',
-            })
-          }
+          // Already saved (anonymous) by saveNominationDraft — this is
+          // normally just a no-op lookup of that id.
+          const savedId = await ensureNominationSaved(flow, get, set)
+          set({ awaitingVerificationId: savedId, awaitingVerificationKind: 'nomination' })
         } else if (flow.type === 'vote') {
           const d = flow.draft
           const vote: Vote = {
             id: `vote-${crypto.randomUUID()}`,
-            userId: userId ?? 'unknown',
+            userId,
             nominationId: d.nominationId,
             payBand: d.payBand ?? 'free_only',
             verified: false,
@@ -440,9 +463,14 @@ export const useAppStore = create<AppState>()(
         if (currentUser) set({ currentUser: { ...currentUser, verified: true } })
 
         if (awaitingVerificationKind === 'nomination') {
+          // Local-only mode's equivalent of claim_nomination — the row was
+          // saved anonymously (userId: null) by ensureNominationSaved, so
+          // confirming attaches the now-known local user to it here.
           set((s) => ({
             nominations: s.nominations.map((n) =>
-              n.id === awaitingVerificationId ? { ...n, verified: true } : n,
+              n.id === awaitingVerificationId
+                ? { ...n, userId: currentUser?.id ?? n.userId, verified: true }
+                : n,
             ),
           }))
         } else if (awaitingVerificationKind === 'vote') {

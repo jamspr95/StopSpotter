@@ -17,8 +17,10 @@ export function NominationFormScreen() {
   const navigate = useNavigate()
   const pendingFlow = useAppStore((s) => s.pendingFlow)
   const updateNominationDraft = useAppStore((s) => s.updateNominationDraft)
+  const saveNominationDraft = useAppStore((s) => s.saveNominationDraft)
   const [stepIndex, setStepIndex] = useState(0)
   const [whyHereDraft, setWhyHereDraft] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const draft = pendingFlow?.type === 'nomination' ? pendingFlow.draft : null
 
@@ -44,8 +46,13 @@ export function NominationFormScreen() {
 
   const step = steps[stepIndex]
 
-  function goNext() {
+  async function goNext() {
     if (stepIndex + 1 >= steps.length) {
+      // Saved here — before SignUpScreen ever asks for an email — so the
+      // stop is captured as soon as the question flow is actually done,
+      // not contingent on the person going on to give an email.
+      setSaving(true)
+      await saveNominationDraft()
       navigate('/spot/signup')
     } else {
       setStepIndex((i) => i + 1)
@@ -66,76 +73,82 @@ export function NominationFormScreen() {
       <ProgressBar step={stepIndex} total={steps.length} />
 
       <div className="flex-1 overflow-y-auto p-4">
-        {step.kind === 'question' && (
-          <QuestionStep
-            questionIndex={step.index}
-            value={draft}
-            onAnswer={(key, value) => {
-              updateNominationDraft({
-                answers: { ...draft.answers, [key]: value } as Partial<DraftNomination['answers']>,
-              })
-              goNext()
-            }}
-            onAnswerMulti={(key, values) =>
-              updateNominationDraft({
-                answers: { ...draft.answers, [key]: values } as Partial<DraftNomination['answers']>,
-              })
-            }
-            onNext={goNext}
-          />
-        )}
-
-        {step.kind === 'landowner' && (
-          <LandownerStep
-            value={draft.landowner ?? {}}
-            onChange={(patch) =>
-              updateNominationDraft({ landowner: { ...draft.landowner, ...patch } })
-            }
-            onNext={goNext}
-          />
-        )}
-
-        {step.kind === 'why_here' && (
-          <div>
-            <h2 className="font-display text-lg font-semibold text-slate-900">Why here? (optional)</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Up to 280 characters. Shown on the public card once reviewed.
-            </p>
-            <textarea
-              maxLength={280}
-              rows={4}
-              value={whyHereDraft}
-              onChange={(e) => setWhyHereDraft(e.target.value)}
-              className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-base"
-              placeholder="Flat field behind the pub, farmer said walkers already use the gate…"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                updateNominationDraft({ whyHere: whyHereDraft || undefined })
-                goNext()
-              }}
-              className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
-            >
-              Continue
-            </button>
-          </div>
-        )}
-
-        {step.kind === 'demand' && (
-          <div>
-            <h2 className="font-display text-lg font-semibold text-slate-900">Would you stay here?</h2>
-            <div className="mt-3">
-              <ChoiceButtons
-                options={payBandOptions}
-                selected={draft.payBand ? [draft.payBand] : []}
-                onToggle={(value) => {
-                  updateNominationDraft({ payBand: value as PayBand })
+        {saving ? (
+          <p className="pt-10 text-center text-sm text-slate-500">Saving your stop…</p>
+        ) : (
+          <>
+            {step.kind === 'question' && (
+              <QuestionStep
+                questionIndex={step.index}
+                value={draft}
+                onAnswer={(key, value) => {
+                  updateNominationDraft({
+                    answers: { ...draft.answers, [key]: value } as Partial<DraftNomination['answers']>,
+                  })
                   goNext()
                 }}
+                onAnswerMulti={(key, values) =>
+                  updateNominationDraft({
+                    answers: { ...draft.answers, [key]: values } as Partial<DraftNomination['answers']>,
+                  })
+                }
+                onNext={goNext}
               />
-            </div>
-          </div>
+            )}
+
+            {step.kind === 'landowner' && (
+              <LandownerStep
+                value={draft.landowner ?? {}}
+                onChange={(patch) =>
+                  updateNominationDraft({ landowner: { ...draft.landowner, ...patch } })
+                }
+                onNext={goNext}
+              />
+            )}
+
+            {step.kind === 'why_here' && (
+              <div>
+                <h2 className="font-display text-lg font-semibold text-slate-900">Why here? (optional)</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Up to 280 characters. Shown on the public card once reviewed.
+                </p>
+                <textarea
+                  maxLength={280}
+                  rows={4}
+                  value={whyHereDraft}
+                  onChange={(e) => setWhyHereDraft(e.target.value)}
+                  className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-base"
+                  placeholder="Flat field behind the pub, farmer said walkers already use the gate…"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateNominationDraft({ whyHere: whyHereDraft || undefined })
+                    goNext()
+                  }}
+                  className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+
+            {step.kind === 'demand' && (
+              <div>
+                <h2 className="font-display text-lg font-semibold text-slate-900">Would you stay here?</h2>
+                <div className="mt-3">
+                  <ChoiceButtons
+                    options={payBandOptions}
+                    selected={draft.payBand ? [draft.payBand] : []}
+                    onToggle={(value) => {
+                      updateNominationDraft({ payBand: value as PayBand })
+                      goNext()
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
