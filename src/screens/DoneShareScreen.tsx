@@ -9,7 +9,7 @@ export function DoneShareScreen() {
   const [copied, setCopied] = useState(false)
 
   const isNomination = flowType === 'nomination'
-  const shareUrl = `${window.location.origin}/`
+  const shareUrl = `${window.location.origin}${import.meta.env.BASE_URL}`
   const shareText = isNomination
     ? "I just spotted a potential motorhome aire for AireStop — have a look on StopSpotter"
     : "I just backed a potential motorhome aire on StopSpotter — go vote on one near you"
