@@ -10,6 +10,7 @@ const EVENT_LABEL: Record<string, string> = {
   share_click: 'Share clicks',
   nomination_submit: 'Nominations',
   vote_submit: 'Votes',
+  growth_feedback_submit: 'Growth feedback',
 }
 
 export function AdminReportsScreen() {

@@ -57,9 +57,16 @@ interface DraftVote {
   payBand?: PayBand
 }
 
+/** Support page's quick "help us grow" options/free-text — see 0006/0007_growth_feedback*.sql. */
+interface DraftGrowthFeedback {
+  options: string[]
+  message?: string
+}
+
 type PendingFlow =
   | { type: 'nomination'; draft: DraftNomination }
   | { type: 'vote'; draft: DraftVote }
+  | { type: 'growth_feedback'; draft: DraftGrowthFeedback }
   | null
 
 interface Identity {
@@ -85,9 +92,9 @@ interface AppState {
    * reads it back once a session exists.
    */
   pendingIdentity: Identity | null
-  /** Id of the nomination/vote just created, awaiting the simulated magic-link click (local-only mode only). */
+  /** Id of the nomination/vote/growth-feedback note just created, awaiting the simulated magic-link click (local-only mode only). */
   awaitingVerificationId: string | null
-  awaitingVerificationKind: 'nomination' | 'vote' | null
+  awaitingVerificationKind: 'nomination' | 'vote' | 'growth_feedback' | null
   /**
    * Real-backend mode only: which auth flow is in flight, until
    * completePendingSignIn() runs and clears it back to null.
@@ -106,6 +113,8 @@ interface AppState {
   updateNominationDraft: (patch: Partial<DraftNomination>) => void
   beginVote: (nominationId: string) => void
   updateVoteDraft: (patch: Partial<DraftVote>) => void
+  /** Support page quick options: starts the same email-capture flow nomination/vote use, so there's someone to follow up with. */
+  beginGrowthFeedback: (options: string[], message?: string) => void
   cancelPendingFlow: () => void
   /**
    * Local-only mode: creates the nomination/vote record immediately.
@@ -216,7 +225,7 @@ async function completePendingSignIn(
     })
     const nomination = nominationFromDraft(id, userId, draft, true, councilArea)
     set({ nominations: [...get().nominations, nomination] })
-  } else {
+  } else if (pendingFlow.type === 'vote') {
     const draft = pendingFlow.draft
     const voteId = await db.insertVote({
       userId,
@@ -241,6 +250,9 @@ async function completePendingSignIn(
     if (draft.landowner) {
       await db.insertLandownerLead(draft.nominationId, draft.landowner)
     }
+  } else {
+    const draft = pendingFlow.draft
+    await db.insertGrowthFeedback(draft.options, draft.message ?? null, email)
   }
 
   set({
@@ -294,6 +306,9 @@ export const useAppStore = create<AppState>()(
             },
           }
         }),
+
+      beginGrowthFeedback: (options, message) =>
+        set({ pendingFlow: { type: 'growth_feedback', draft: { options, message } } }),
 
       cancelPendingFlow: () => set({ pendingFlow: null, pendingIdentity: null }),
 
@@ -375,7 +390,7 @@ export const useAppStore = create<AppState>()(
               awaitingVerificationKind: 'nomination',
             })
           }
-        } else {
+        } else if (flow.type === 'vote') {
           const d = flow.draft
           const vote: Vote = {
             id: `vote-${crypto.randomUUID()}`,
@@ -406,6 +421,15 @@ export const useAppStore = create<AppState>()(
               ),
             }))
           }
+        } else {
+          // growth_feedback — local-only mode has no backend table to write
+          // to; still run the same simulated verify step as nomination/vote
+          // for a consistent UI, there's just nothing for confirmMagicLink
+          // to flip afterwards (see its growth_feedback branch).
+          set({
+            awaitingVerificationId: `growth-${crypto.randomUUID()}`,
+            awaitingVerificationKind: 'growth_feedback',
+          })
         }
       },
 
@@ -421,13 +445,14 @@ export const useAppStore = create<AppState>()(
               n.id === awaitingVerificationId ? { ...n, verified: true } : n,
             ),
           }))
-        } else {
+        } else if (awaitingVerificationKind === 'vote') {
           set((s) => ({
             votes: s.votes.map((v) =>
               v.id === awaitingVerificationId ? { ...v, verified: true } : v,
             ),
           }))
         }
+        // growth_feedback: nothing local to flip — local-only mode never wrote it anywhere.
 
         set({ pendingFlow: null, awaitingVerificationId: null, awaitingVerificationKind: null })
       },

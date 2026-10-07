@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
-import { insertGrowthFeedback } from '../lib/db'
-import { isSupabaseConfigured } from '../lib/supabaseClient'
+import { useAppStore } from '../store/useAppStore'
 
 const GROWTH_OPTIONS = [
   "I'd support a crowdfund",
@@ -12,34 +11,20 @@ const GROWTH_OPTIONS = [
 
 export function SupportScreen() {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState<string[]>([])
+  const beginGrowthFeedback = useAppStore((s) => s.beginGrowthFeedback)
   const [message, setMessage] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [sent, setSent] = useState(false)
 
-  function toggleOption(option: string) {
-    setSelected((prev) =>
-      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option],
-    )
+  // Tapping an option is itself the submit action — it carries straight into
+  // the same email-capture flow nomination/vote use (SignUpScreen), so
+  // there's someone real to follow up with rather than an anonymous row.
+  function handleOption(option: string) {
+    beginGrowthFeedback([option], message.trim() || undefined)
+    navigate('/spot/signup')
   }
 
-  async function handleSendFeedback() {
-    setSubmitting(true)
-    try {
-      // Local-only mode (no Supabase project configured) has nowhere to send
-      // this — fail open to the thank-you state rather than block the user
-      // on a backend that isn't there, same pattern as DropPinScreen's
-      // nearby-nomination check.
-      if (isSupabaseConfigured) {
-        await insertGrowthFeedback(selected, message.trim() || null)
-      }
-      setSent(true)
-    } catch (err) {
-      console.error('StopSpotter: growth feedback submit failed.', err)
-      setSent(true)
-    } finally {
-      setSubmitting(false)
-    }
+  function handleSendMessage() {
+    beginGrowthFeedback([], message.trim() || undefined)
+    navigate('/spot/signup')
   }
 
   return (
@@ -79,55 +64,39 @@ export function SupportScreen() {
           <p className="text-sm font-medium text-slate-700">Help us grow</p>
           <p className="mt-1 text-sm text-slate-600">
             We're exploring how to grow and develop StopSpotter faster. If any of this applies
-            to you, let us know — it'll never change a stop's votes or ranking, it's a separate
-            way to help.
+            to you, tap it below — it'll never change a stop's votes or ranking, it's a separate
+            way to help. We'll ask for your email so we can get back to you.
           </p>
 
-          {sent ? (
-            <p className="mt-3 text-sm font-medium text-brand-700">
-              Thanks — we've got your note.
-            </p>
-          ) : (
-            <>
-              <div className="mt-3 flex flex-col gap-2">
-                {GROWTH_OPTIONS.map((option) => {
-                  const isSelected = selected.includes(option)
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => toggleOption(option)}
-                      aria-pressed={isSelected}
-                      className={`rounded-lg border px-3 py-2 text-left text-sm font-medium ${
-                        isSelected
-                          ? 'border-brand-600 bg-brand-50 text-brand-700'
-                          : 'border-slate-200 bg-white text-slate-700'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Anything else you'd like to tell us?"
-                rows={3}
-                className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm"
-              />
-
+          <div className="mt-3 flex flex-col gap-2">
+            {GROWTH_OPTIONS.map((option) => (
               <button
+                key={option}
                 type="button"
-                disabled={submitting || (selected.length === 0 && message.trim() === '')}
-                onClick={handleSendFeedback}
-                className="mt-2 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                onClick={() => handleOption(option)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 active:bg-slate-50"
               >
-                {submitting ? 'Sending…' : 'Send'}
+                {option}
               </button>
-            </>
-          )}
+            ))}
+          </div>
+
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Anything else you'd like to tell us?"
+            rows={3}
+            className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm"
+          />
+
+          <button
+            type="button"
+            disabled={message.trim() === ''}
+            onClick={handleSendMessage}
+            className="mt-2 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            Send
+          </button>
         </div>
 
         <button

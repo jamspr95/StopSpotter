@@ -7,6 +7,7 @@ export type AnalyticsEventType =
   | 'share_click'
   | 'nomination_submit'
   | 'vote_submit'
+  | 'growth_feedback_submit'
 
 /**
  * First-touch attribution: captures utm_campaign (or utm_source as a

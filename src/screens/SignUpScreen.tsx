@@ -56,6 +56,8 @@ export function SignUpScreen() {
   if (!pendingFlow) return null
 
   const isNomination = pendingFlow.type === 'nomination'
+  const isGrowthFeedback = pendingFlow.type === 'growth_feedback'
+  const confirmWhat = isNomination ? 'your nomination' : isGrowthFeedback ? 'your note' : 'your vote'
   const emailFormatValid = /\S+@\S+\.\S+/.test(email)
   const emailIsDisposable = emailFormatValid && isDisposableEmail(email)
   const emailValid = emailFormatValid && !emailIsDisposable
@@ -103,7 +105,7 @@ export function SignUpScreen() {
         <div className="flex-1 p-4">
           <p className="text-base text-slate-700">
             We've sent a link to <span className="font-medium">{email}</span>. Click it to
-            confirm{isNomination ? ' your nomination' : ' your vote'}.
+            confirm {confirmWhat}.
           </p>
           <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500">
             Prototype note: no email is actually sent yet — that needs a live Supabase project
@@ -113,7 +115,7 @@ export function SignUpScreen() {
             type="button"
             onClick={() => {
               confirmMagicLink()
-              navigate('/done', { state: { flowType: isNomination ? 'nomination' : 'vote' } })
+              navigate('/done', { state: { flowType: pendingFlow.type } })
             }}
             className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
           >
@@ -134,8 +136,7 @@ export function SignUpScreen() {
         <div className="flex-1 p-4">
           <p className="text-base text-slate-700">
             We've sent a link to <span className="font-medium">{email}</span>. Open it on this
-            device to confirm{isNomination ? ' your nomination' : ' your vote'} — this page will
-            carry on automatically once you do.
+            device to confirm {confirmWhat} — this page will carry on automatically once you do.
           </p>
         </div>
       </div>
@@ -201,8 +202,9 @@ export function SignUpScreen() {
         />
 
         <p className="mt-5 text-sm text-slate-600">
-          We'll use your email to sign you in, check your submission is genuine, and tell you
-          what happens to stops you spot.
+          {isGrowthFeedback
+            ? "We'll use your email to sign you in, check you're genuine, and get back to you about this."
+            : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
         </p>
 
         <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">

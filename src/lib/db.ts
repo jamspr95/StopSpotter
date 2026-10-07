@@ -406,11 +406,21 @@ export async function insertModerationReport(nominationId: string, reason: strin
   if (error) throw error
 }
 
-/** Support page's quick "help us grow" form — see 0006_growth_feedback.sql. */
-export async function insertGrowthFeedback(options: string[], message: string | null): Promise<void> {
+/**
+ * Support page's quick "help us grow" form — see 0006_growth_feedback.sql /
+ * 0007_growth_feedback_email.sql. Only ever called post-sign-in (from
+ * completePendingSignIn), same as insertNomination/insertVote — an email is
+ * always present because SignUpScreen never renders a "submit without
+ * email" option for this flow.
+ */
+export async function insertGrowthFeedback(
+  options: string[],
+  message: string | null,
+  email: string,
+): Promise<void> {
   const { error } = await client()
     .from('growth_feedback')
-    .insert({ options, message })
+    .insert({ options, message, email })
   if (error) throw error
 }
 
