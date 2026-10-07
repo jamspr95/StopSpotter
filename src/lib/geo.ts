@@ -35,6 +35,16 @@ export function snapToPublicGrid(point: LatLng): LatLng {
   }
 }
 
+/**
+ * How far the real pin can land from its snapToPublicGrid point — half the
+ * ~1km grid cell in each direction, so up to ~707m (Pythagoras) worst case;
+ * rounded down to a clean number rather than implying false precision. The
+ * public map draws this as a circle around the snapped point (not a pin),
+ * so it reads as "somewhere in this area" rather than a specific — and
+ * wrong — place.
+ */
+export const PUBLIC_FUZZ_RADIUS_M = 600
+
 const DUPLICATE_RADIUS_M = 200
 
 /** Finds an existing nomination within the 200m duplicate-pin radius, if any. */

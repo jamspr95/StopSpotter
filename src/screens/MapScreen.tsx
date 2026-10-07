@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
-import { MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Popup, useMapEvents } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { MAP_CENTRE, SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED } from '../data/seed'
+import { PUBLIC_FUZZ_RADIUS_M } from '../lib/geo'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 import type { LatLng } from '../types'
@@ -56,8 +57,19 @@ export function MapScreen() {
       >
         <MapTiles satellite={satellite} />
         <ViewportTracker onMove={(centre, zoom) => { viewRef.current = { centre, zoom } }} />
+        {/* A circle, not a pin — the public location is already fuzzed to a
+            ~1km grid (snapToPublicGrid, src/lib/geo.ts) to keep the real
+            spot private, and a precise-looking pin marker at an imprecise
+            point reads as "the stop is right here" when it isn't. A ring
+            of uncertainty around the snapped point is honest about that:
+            the real stop is somewhere in this area, not at its centre. */}
         {nominations.map((n) => (
-          <Marker key={n.id} position={n.public}>
+          <Circle
+            key={n.id}
+            center={n.public}
+            radius={PUBLIC_FUZZ_RADIUS_M}
+            pathOptions={{ color: '#10385a', weight: 2, fillColor: '#10385a', fillOpacity: 0.2 }}
+          >
             <Popup>
               <div className="text-sm">
                 <p className="mb-2 font-medium">
@@ -72,7 +84,7 @@ export function MapScreen() {
                 </button>
               </div>
             </Popup>
-          </Marker>
+          </Circle>
         ))}
       </MapContainer>
 
