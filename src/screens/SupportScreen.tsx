@@ -9,9 +9,24 @@ export function SupportScreen() {
       <ScreenHeader title="Support AireStop" />
       <div className="flex-1 overflow-y-auto p-4">
         <p className="text-base text-slate-700">
-          AireStop is working to get more motorhome aires on the ground across England, Wales
-          and Scotland. Right now, the most valuable thing you can do is help us find them:
-          every nomination and vote on StopSpotter becomes evidence we can take to a landowner.
+          AireStop is on a mission to build a network of motorhome stopovers across the UK —
+          and we need your help.
+        </p>
+        <ol className="mt-3 flex flex-col gap-2 text-base text-slate-700">
+          <li>
+            <span className="font-semibold text-slate-900">1. Spot a stop.</span> Know a good
+            place you'd like to stay? Tell us about it — if we agree, we'll approach the
+            landowner and work to make it happen.
+          </li>
+          <li>
+            <span className="font-semibold text-slate-900">2. Back a stop.</span> Browse the
+            map and vote for the stops you'd actually use. Every vote helps show a landowner
+            the demand is real.
+          </li>
+        </ol>
+        <p className="mt-3 text-base text-slate-700">
+          Right now, the most valuable thing you can do is help us find them: every nomination
+          and vote on StopSpotter becomes evidence we can take to a landowner.
         </p>
 
         <button

@@ -74,6 +74,22 @@ export function MapScreen() {
           {backendReady ? `${totalSpotted} stops spotted` : 'Loading…'}
         </div>
 
+        {/* Brand mark, centred at the top of the map in its own row below the
+            toggle/badge row — sharing that row risks colliding with either on
+            a narrow phone (the "stops spotted" badge's width varies with the
+            live count). Same source SVG as the app's own LogoWordmark
+            component; forced white with a filter since the source is
+            navy-on-transparent for light surfaces — the same "invert via a
+            white tint" treatment that component reserves for dark surfaces.
+            Width is fixed from the component's documented 155:25 aspect
+            ratio rather than left to load-time intrinsic sizing, so layout
+            doesn't shift/collapse if the external SVG is slow or fails to load. */}
+        <img
+          src="https://airestop.co.uk/logo.svg"
+          alt="AireStop"
+          className="absolute left-1/2 top-14 z-10 h-6 w-[149px] -translate-x-1/2 brightness-0 invert"
+        />
+
         <button
           type="button"
           onClick={() => navigate('/spot')}
@@ -82,33 +98,30 @@ export function MapScreen() {
           Spot a stop
         </button>
 
-        {/* AireStop watermark, sat just above the Leaflet/Esri attribution strip.
-            Same source SVG as the app's own LogoWordmark component; forced white
-            with a filter since the source is navy-on-transparent for light surfaces —
-            the same "invert via a white tint" treatment that component reserves for
-            dark surfaces. Width is fixed from the component's documented 155:25
-            aspect ratio rather than left to load-time intrinsic sizing, so layout
-            doesn't shift/collapse if the external SVG is slow or fails to load.
-            Sized to clear the centred "Spot a stop" button on a narrow phone
-            screen — a wider logo (e.g. the +30% of LogoWordmark's 22px default
-            that was tried first) overlapped it; this is the largest size that
-            still fits the gap to the button's right. */}
-        <img
-          src="https://airestop.co.uk/logo.svg"
-          alt="AireStop"
-          className="absolute bottom-7 right-2 z-10 h-[18px] w-[112px] brightness-0 invert"
-        />
-
         {!hasSeenIntro && (
           <div className="absolute inset-0 z-30 flex items-end bg-slate-900/40 p-4">
             <div className="w-full rounded-2xl bg-white p-5 shadow-xl">
               <h2 className="font-display text-lg font-bold text-slate-900">
-                Help find the next aire
+                Help build the UK's motorhome stop network
               </h2>
               <p className="mt-2 text-sm text-slate-600">
-                Seen somewhere that would make a good motorhome stop? Drop a pin and tell us
-                about it, or vote on stops other people have already found. Anyone can browse —
-                we only ask for your email when you nominate or vote.
+                AireStop is on a mission to build a network of motorhome stopovers across the
+                UK — and we need your help.
+              </p>
+              <ol className="mt-3 flex flex-col gap-2 text-sm text-slate-600">
+                <li>
+                  <span className="font-semibold text-slate-800">1. Spot a stop.</span> Know a
+                  good place you'd like to stay? Tell us about it — if we agree, we'll approach
+                  the landowner and work to make it happen.
+                </li>
+                <li>
+                  <span className="font-semibold text-slate-800">2. Back a stop.</span> Browse
+                  the map and vote for the stops you'd actually use. Every vote helps show a
+                  landowner the demand is real.
+                </li>
+              </ol>
+              <p className="mt-3 text-sm text-slate-600">
+                Anyone can browse — we'll only ask for your email when you nominate or vote.
               </p>
               <button
                 type="button"

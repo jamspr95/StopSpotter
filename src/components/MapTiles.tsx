@@ -26,7 +26,7 @@ export function SatelliteToggle({
   onChange: (value: boolean) => void
 }) {
   return (
-    <div className="flex overflow-hidden rounded-full border border-slate-200 bg-white text-xs font-medium shadow-sm">
+    <div className="flex overflow-hidden rounded-full bg-white text-xs font-medium shadow-sm">
       <button
         type="button"
         onClick={() => onChange(false)}
