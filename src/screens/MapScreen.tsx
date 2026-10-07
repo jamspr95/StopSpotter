@@ -66,29 +66,30 @@ export function MapScreen() {
           ))}
         </MapContainer>
 
-        <div className="absolute left-3 top-3 z-10">
+        {/* Brand mark, centred at the top of the map and stacked above the
+            toggle/badge row below it. On a white chip in its natural
+            navy-on-transparent form, matching the toggle/badge pills'
+            own white-chip treatment — a forced-white filter was tried
+            first (brightness-0 + invert), but that flattens every colour
+            in the source artwork to one solid silhouette, which made the
+            "Aire" lettering disappear into the rest of the mark rather
+            than reading as separate letters. A white backdrop means the
+            logo's real navy reads correctly without any filter trick.
+            Width is fixed from the source's documented 155:25 aspect
+            ratio rather than left to load-time intrinsic sizing, so
+            layout doesn't shift/collapse if the external SVG is slow or
+            fails to load. */}
+        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 shadow-sm">
+          <img src="https://airestop.co.uk/logo.svg" alt="AireStop" className="h-5 w-[124px]" />
+        </div>
+
+        <div className="absolute left-3 top-[60px] z-10">
           <SatelliteToggle satellite={satellite} onChange={setSatellite} />
         </div>
 
-        <div className="absolute right-3 top-3 z-10 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
+        <div className="absolute right-3 top-[60px] z-10 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
           {backendReady ? `${totalSpotted} stops spotted` : 'Loading…'}
         </div>
-
-        {/* Brand mark, centred at the top of the map in its own row below the
-            toggle/badge row — sharing that row risks colliding with either on
-            a narrow phone (the "stops spotted" badge's width varies with the
-            live count). Same source SVG as the app's own LogoWordmark
-            component; forced white with a filter since the source is
-            navy-on-transparent for light surfaces — the same "invert via a
-            white tint" treatment that component reserves for dark surfaces.
-            Width is fixed from the component's documented 155:25 aspect
-            ratio rather than left to load-time intrinsic sizing, so layout
-            doesn't shift/collapse if the external SVG is slow or fails to load. */}
-        <img
-          src="https://airestop.co.uk/logo.svg"
-          alt="AireStop"
-          className="absolute left-1/2 top-14 z-10 h-6 w-[149px] -translate-x-1/2 brightness-0 invert"
-        />
 
         <button
           type="button"

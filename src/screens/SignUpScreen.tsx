@@ -201,7 +201,8 @@ export function SignUpScreen() {
         />
 
         <p className="mt-5 text-sm text-slate-600">
-          We'll use your email to sign you in and tell you what happens to stops you spot.
+          We'll use your email to sign you in, check your submission is genuine, and tell you
+          what happens to stops you spot.
         </p>
 
         <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
