@@ -29,12 +29,12 @@ export function DoneShareScreen() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <ScreenHeader title={isNomination ? 'Your spot is in' : 'Thanks for voting'} onBack={false} />
+      <ScreenHeader title={isNomination ? 'Your stop is in' : 'Thanks for voting'} onBack={false} />
       <div className="flex-1 overflow-y-auto p-4">
         <p className="text-base text-slate-700">
           {isNomination
-            ? "Thanks — we'll let you know what happens to it in My spots."
-            : 'Your vote adds to the demand evidence for this site.'}
+            ? "Thanks — we'll let you know what happens to it in My Stops."
+            : 'Your vote adds to the demand evidence for this stop.'}
         </p>
 
         <button
@@ -50,7 +50,7 @@ export function DoneShareScreen() {
           onClick={() => navigate('/')}
           className="mt-3 w-full rounded-xl border border-slate-200 py-3.5 text-base font-semibold text-slate-700"
         >
-          Vote on nearby sites
+          Vote on nearby stops
         </button>
 
         <button

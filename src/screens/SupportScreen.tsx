@@ -19,15 +19,15 @@ export function SupportScreen() {
           onClick={() => navigate('/spot')}
           className="mt-5 block w-full rounded-xl bg-brand-600 py-3.5 text-center text-base font-semibold text-white active:bg-brand-700"
         >
-          Spot a site
+          Spot a stop
         </button>
 
         <div className="mt-6 rounded-xl bg-slate-50 p-3">
           <p className="text-sm font-medium text-slate-700">Coming soon</p>
           <p className="mt-1 text-sm text-slate-600">
-            Once we've got enough sites and demand evidence, we'll open a crowdfunder and
+            Once we've got enough stops and demand evidence, we'll open a crowdfunder and
             supporter memberships to help get them certified. Backing AireStop will never
-            change a site's votes or ranking — it'll be a separate way to help.
+            change a stop's votes or ranking — it'll be a separate way to help.
           </p>
         </div>
 

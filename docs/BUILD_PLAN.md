@@ -23,7 +23,7 @@
 | Map | MapLibre or Leaflet, OpenStreetMap tiles, a satellite layer | Free or low cost, works well on phones |
 | Database and sign-in | Supabase (Postgres with PostGIS, built-in magic-link login) | Spatial queries, auth and storage in one place |
 | Council areas | ONS local authority boundaries | Free, official, matches how councils think |
-| Ownership check | Site finder for public land; manual Land Registry title search by admins for other promising sites | Avoids rebuilding land data |
+| Ownership check | Site finder for public land; manual Land Registry title search by admins for other promising stops | Avoids rebuilding land data |
 | Email | Brevo for supporters, synced with consent flags; Gmail for landowner outreach | One list, one place to manage unsubscribes |
 | Sales pipeline | Brevo CRM (Deals module) | Already in the stack for supporter email; deals can link straight to the nominator's contact |
 | Analytics | Cookieless analytics with campaign tags on Facebook links | Measures the funnel without a cookie banner |
@@ -40,10 +40,10 @@ wording shown and when it was given.
 | `users` | id, email, first_name (optional), verified_at, source, created_at | No phone, address or home location |
 | `consents` | user_id, purpose, granted, wording_version, timestamp | One row per purpose per change; never overwritten |
 | `nominations` | id, user_id, exact_lat, exact_lng, public_lat, public_lng, council_area, answers 1–8, why_here, criteria_score, flags, owner_type, ownership_hint, status, verified, created_at | Exact coordinates admin-only; `user_id` empty for anonymous nominations; `source` = user, site finder, or both |
-| `landowner_leads` | id, nomination_id, owner_name_or_org, contact (optional), how_known, happy_to_be_contacted, created_at | Admin-only; never public; deleted if the site is rejected |
+| `landowner_leads` | id, nomination_id, owner_name_or_org, contact (optional), how_known, happy_to_be_contacted, created_at | Admin-only; never public; deleted if the stop is rejected |
 | `votes` | id, user_id, nomination_id, pay_band, verified, created_at | One vote per user per nomination |
-| `status_history` | nomination_id, from_status, to_status, changed_by, note, timestamp | Drives "My spots" updates and audit trail |
-| `moderation_reports` | nomination_id, reporter_id, reason, resolved, timestamp | From the report button on a site card |
+| `status_history` | nomination_id, from_status, to_status, changed_by, note, timestamp | Drives "My Stops" updates and audit trail |
+| `moderation_reports` | nomination_id, reporter_id, reason, resolved, timestamp | From the report button on a stop card |
 
 Council-area summaries (nominations, votes, pay-band split, top nearby
 features) are calculated from these tables rather than stored separately.
@@ -54,28 +54,28 @@ features) are calculated from these tables rather than stored separately.
 
 | # | Screen | Purpose | Key elements | Primary action |
 |---|---|---|---|---|
-| 1 | Map (home) | Show what's been spotted | Full-screen map, approximate markers, council-area heat when zoomed out, running total, short first-visit intro | Spot a site |
-| 2 | Site card | Let people back a nomination | Site type, nearby features, "why here" quote, vote count, share of voters who'd pay | I'd stay here |
+| 1 | Map (home) | Show what's been spotted | Full-screen map, approximate markers, council-area heat when zoomed out, running total, short first-visit intro | Spot a stop |
+| 2 | Stop card | Let people back a nomination | Stop type, nearby features, "why here" quote, vote count, share of voters who'd pay | I'd stay here |
 | 3 | Drop pin | Place a nomination | Crosshair pin, place/postcode search, map/satellite toggle, guidance text | Confirm location |
-| 4 | Nomination form | Capture site data | 8 questions (see below), progress bar, one question per screen on mobile | Submit |
+| 4 | Nomination form | Capture stop data | 8 questions (see below), progress bar, one question per screen on mobile | Submit |
 | 5 | Sign-up | Verify the person, record consent | Email, optional first name, separate unticked opt-ins, privacy notice link, "Submit without email" link | Send my link |
-| 6 | Done and share | Reward and spread | "Your spot is in", prefilled Facebook share, invite to vote nearby, support prompt | Share |
-| 7 | My spots | Close the loop | Nominations/votes with status (Submitted, Under review, Shortlisted, Live, Not suitable), synced from the sales pipeline | View site |
-| 8 | Support | Pre-crowdfunder: ask for more stop suggestions. Post-launch: convert to backing | What AireStop is doing; primary CTA is "Spot a site" until the crowdfunder is live, then supporter tier/crowdfunder links take over; a "Coming soon" note covers the gap; back-to-map button | Spot a site (Back AireStop once live) |
+| 6 | Done and share | Reward and spread | "Your stop is in", prefilled Facebook share, invite to vote nearby, support prompt | Share |
+| 7 | My Stops | Close the loop | Nominations/votes with status (Submitted, Under review, Shortlisted, Live, Not suitable), synced from the sales pipeline | View stop |
+| 8 | Support | Pre-crowdfunder: ask for more stop suggestions. Post-launch: convert to backing | What AireStop is doing; primary CTA is "Spot a stop" until the crowdfunder is live, then supporter tier/crowdfunder links take over; a "Coming soon" note covers the gap; back-to-map button | Spot a stop (Back AireStop once live) |
 
 ### Interaction rules
 - Duplicate check at pin drop: an existing nomination within 200m is offered as a vote first.
 - The form completes before sign-up; the nomination/vote is saved as pending and counts once the magic link is clicked.
-- Sign-up offers "Submit without email" — anonymous nominations are stored as site data, flagged unverified, and pass through automatic moderation before going public. Votes always need a verified email.
+- Sign-up offers "Submit without email" — anonymous nominations are stored as stop data, flagged unverified, and pass through automatic moderation before going public. Votes always need a verified email.
 - Magic link signs in and verifies in one step, no passwords.
 - "Use my location" centres the map only — the user's own location is never stored.
-- Share links open the map zoomed to the shared site, card open.
+- Share links open the map zoomed to the shared stop, card open.
 
 ---
 
 ## Nomination form (8 questions + scoring)
 
-Each question ties to a site criterion; feeds an automatic criteria score
+Each question ties to a stop criterion; feeds an automatic criteria score
 admins use to triage. ~45 seconds to complete.
 
 | # | Question | Answer type | Criterion | Score |
@@ -93,17 +93,17 @@ Plus optional free text "Why here?" (280 chars), shown on the public card
 after moderation.
 
 **Landowner follow-up** (when Q2 answer isn't "Don't know"): owner name/org,
-how known (I own it / I know them / Public information), contact details
-(only when owner is the nominator or an organisation), and — if the
-nominator owns it — "happy to be contacted?". This is the best lead the tool
-can produce; surface it first to admins.
+how known (I own it / I know them / Public information / I don't know),
+contact details (only when owner is the nominator or an organisation), and —
+if the nominator owns it — "happy to be contacted?". This is the best lead
+the tool can produce; surface it first to admins.
 
 **System-added fields** (no user input): council area (from pin coordinates
 vs. local authority boundaries), ownership hints from the site finder, and
-the criteria score/pass-fail flag (a "fail" still saves the site — users may
+the criteria score/pass-fail flag (a "fail" still saves the stop — users may
 be wrong).
 
-**Voting** asks only Q8, unless the site's owner isn't yet known — then the
+**Voting** asks only Q8, unless the stop's owner isn't yet known — then the
 voter also gets Q2 and the landowner follow-up, so votes can help establish
 ownership.
 
@@ -119,14 +119,14 @@ before launch.
   separate, unticked checkboxes — never bundled or pre-ticked.
 - Every consent (`granted`, `wording_version`, `timestamp`) is recorded as a
   new row, never overwritten, so the list is defensible later.
-- Unverified email addresses are deleted after 30 days; the site data they
+- Unverified email addresses are deleted after 30 days; the stop data they
   submitted is kept with no personal data attached.
-- One-click unsubscribe on every marketing email; "My spots" has a
+- One-click unsubscribe on every marketing email; "My Stops" has a
   delete-account option that anonymises the user's nominations.
 - No cookie banner needed if analytics stays cookieless — don't add a Meta
   pixel without adding consent UI to match.
 - Landowner personal details (private owner's name) are admin-only, never
-  published, and deleted if the site is rejected.
+  published, and deleted if the stop is rejected.
 - Investment communications (equity raise) must never go to this list
   without an approved financial promotion (FCA rules); the "support AireStop"
   opt-in covers rewards crowdfunding and supporter tiers only, not equity.
@@ -139,22 +139,22 @@ before launch.
 | Zoomed out | Heat by council area, with counts | Same, plus filters |
 | "Why here" text | After moderation | Always |
 | Landowner details | Never | Full detail, for outreach |
-| Sites in landowner talks | Hidden, or "in progress" with no marker | Full detail |
-| Rejected sites | Hidden | Kept with reason |
+| Stops in landowner talks | Hidden, or "in progress" with no marker | Full detail |
+| Rejected stops | Hidden | Kept with reason |
 
 ### Moderation (automatic by default — admin time is very limited)
 - Free text and new pins pass an automatic AI check (offensive content,
   personal details, pins on homes/gardens) and publish unless flagged.
 - Only flagged items reach the admin queue; admins review in short batches
   (e.g. weekly).
-- Report button on every site card feeds the moderation table.
+- Report button on every stop card feeds the moderation table.
 
 ### Anti-gaming
-- One vote per verified email per site.
+- One vote per verified email per stop.
 - Disposable email domains blocked at sign-up.
 - Cap of 50 nominations per user per day.
 - Nominations within 200m offered as votes first.
-- Backing AireStop never changes a site's votes or ranking.
+- Backing AireStop never changes a stop's votes or ranking.
 
 ---
 
@@ -162,7 +162,7 @@ before launch.
 
 Password-protected, desktop-first.
 
-- Site list, filterable by council area, status, criteria score, pass/fail
+- Stop list, filterable by council area, status, criteria score, pass/fail
   flags and vote count.
 - Exact map with satellite view and any landowner details alongside.
 - Status synced automatically from the sales pipeline (no manual updates in
@@ -173,8 +173,8 @@ Password-protected, desktop-first.
 - Supporter sync to Brevo with consent flags (opted-in users only).
   Landowner outreach happens from Gmail using the landowner leads table.
 
-**Demand report** (PDF and CSV, per site or per council area): headline
-supporter count and price-band willingness, shortlisted sites with criteria
+**Demand report** (PDF and CSV, per stop or per council area): headline
+supporter count and price-band willingness, shortlisted stops with criteria
 scores and nearby features, a small map of approximate locations, a
 selection of anonymised "why here" quotes, and a date range/method note.
 This is the piece to show any landowner before asking about land.
@@ -193,7 +193,7 @@ StopSpotter, and StopSpotter only reflects what Brevo says.
 - **Deal creation**: when a nomination passes initial automatic moderation,
   create a Brevo deal linked to the nominator's Brevo contact (the same
   contact created at sign-up, consent flags and all).
-- **Landowner-only deals** (e.g. a council-owned site with no linked
+- **Landowner-only deals** (e.g. a council-owned stop with no linked
   nominator, or where outreach is the main activity) get a dedicated Brevo
   contact so the deal has something to attach to — but that contact:
   - sits in a separate list, excluded from every marketing automation,
@@ -225,7 +225,7 @@ rationale. Engineering implications:
   `ownership_hint` and supplement the criteria score.
 - A matching job merges a user pin into an existing site finder candidate
   record when within 200m.
-- A combined priority score (site fit + demand + ownership known) feeds the
+- A combined priority score (stop fit + demand + ownership known) feeds the
   sales pipeline.
 
 ---
@@ -261,8 +261,8 @@ rationale. Engineering implications:
 | Landowner follow-up fields + `landowner_leads` write | ⬜ |
 | Anti-gaming: disposable-email blocklist, 50/day nomination cap | ⬜ |
 | Automatic AI moderation check (offensive content, personal details, home/garden pins) on free text + new pins | ⬜ |
-| Share flow: prefilled Facebook share, deep link opens map at site | ⬜ |
-| "My spots" screen with status history | ⬜ |
+| Share flow: prefilled Facebook share, deep link opens map at stop | ⬜ |
+| "My Stops" screen with status history | ⬜ |
 | Cookieless analytics + campaign tagging on share/post links | ⬜ |
 
 ### Milestone 3 — Admin and reporting
@@ -270,7 +270,7 @@ rationale. Engineering implications:
 | Task | Status |
 |---|---|
 | Password-protected admin view (desktop-first) | ⬜ |
-| Site list with filters (council area, status, score, flags, vote count) | ⬜ |
+| Stop list with filters (council area, status, score, flags, vote count) | ⬜ |
 | Exact-location admin map view (satellite, landowner details inline) | ⬜ |
 | Moderation queue (flagged free text + pins + reports) | ⬜ |
 | Confirm Brevo plan includes the Deals (CRM) module; set up pipeline with public-safe + private stages | ⬜ |
@@ -279,7 +279,7 @@ rationale. Engineering implications:
 | Supabase Edge Function: receive Brevo deal-stage webhook, map to public status enum, write `nominations.status` + `status_history` | ⬜ |
 | Trigger the applicant status email only on public-safe stage changes | ⬜ |
 | Brevo sync for opted-in supporters, consent-flag aware | ⬜ |
-| Demand report generator (PDF + CSV), per site or per council area | ⬜ |
+| Demand report generator (PDF + CSV), per stop or per council area | ⬜ |
 | Site finder integration: shared targets table / sync job, "Suggested by AireStop" markers, 200m merge matching, combined priority score | ⬜ |
 
 ### Milestone 4 — Soft launch

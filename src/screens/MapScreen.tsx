@@ -24,7 +24,7 @@ export function MapScreen() {
       <header className="z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <span className="font-display text-lg font-bold text-brand-700">StopSpotter</span>
         <nav className="flex gap-4 text-sm font-medium text-slate-600">
-          <Link to="/my-spots">My spots</Link>
+          <Link to="/my-stops">My Stops</Link>
           <Link to="/support">Support</Link>
         </nav>
       </header>
@@ -49,10 +49,10 @@ export function MapScreen() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => navigate(`/site/${n.id}`)}
+                    onClick={() => navigate(`/stop/${n.id}`)}
                     className="font-semibold text-brand-700 underline"
                   >
-                    View site
+                    View stop
                   </button>
                 </div>
               </Popup>
@@ -65,7 +65,7 @@ export function MapScreen() {
         </div>
 
         <div className="absolute right-3 top-3 z-10 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
-          {totalSpotted} sites spotted
+          {totalSpotted} stops spotted
         </div>
 
         <button
@@ -73,7 +73,7 @@ export function MapScreen() {
           onClick={() => navigate('/spot')}
           className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg active:bg-brand-700"
         >
-          Spot a site
+          Spot a stop
         </button>
 
         {/* AireStop watermark, sat just above the Leaflet/Esri attribution strip.
@@ -83,7 +83,7 @@ export function MapScreen() {
             dark surfaces. Width is fixed from the component's documented 155:25
             aspect ratio rather than left to load-time intrinsic sizing, so layout
             doesn't shift/collapse if the external SVG is slow or fails to load.
-            Sized to clear the centred "Spot a site" button on a narrow phone
+            Sized to clear the centred "Spot a stop" button on a narrow phone
             screen — a wider logo (e.g. the +30% of LogoWordmark's 22px default
             that was tried first) overlapped it; this is the largest size that
             still fits the gap to the button's right. */}
@@ -100,9 +100,9 @@ export function MapScreen() {
                 Help find the next aire
               </h2>
               <p className="mt-2 text-sm text-slate-600">
-                See a spot that would make a good motorhome stop? Drop a pin and tell us about
-                it, or vote on spots other people have already found. Anyone can browse — we
-                only ask for your email when you nominate or vote.
+                Seen somewhere that would make a good motorhome stop? Drop a pin and tell us
+                about it, or vote on stops other people have already found. Anyone can browse —
+                we only ask for your email when you nominate or vote.
               </p>
               <button
                 type="button"

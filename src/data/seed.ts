@@ -85,7 +85,7 @@ export const seedNominations: Nomination[] = [
   ),
 ]
 
-/** The demo "sites spotted" baseline already counts the markers above — see MapScreen's totalSpotted. */
+/** The demo "stops spotted" baseline already counts the markers above — see MapScreen's totalSpotted. */
 export const SEED_TOTAL_SPOTTED = 412
 export const SEED_NOMINATION_COUNT = seedNominations.length
 
@@ -100,7 +100,7 @@ function seedVote(id: string, nominationId: string, payBand: PayBand, daysAgo: n
   }
 }
 
-/** A handful of pre-existing votes so the prototype's site cards don't all read "0 votes". */
+/** A handful of pre-existing votes so the prototype's stop cards don't all read "0 votes". */
 export const seedVotes: Vote[] = [
   seedVote('sv-1', 'seed-1', 'up_to_10', 6),
   seedVote('sv-2', 'seed-1', 'free_only', 5),

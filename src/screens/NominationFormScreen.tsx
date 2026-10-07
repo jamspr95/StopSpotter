@@ -62,7 +62,7 @@ export function NominationFormScreen() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <ScreenHeader title="Nominate a site" onBack={goBackStep} />
+      <ScreenHeader title="Nominate a stop" onBack={goBackStep} />
       <ProgressBar step={stepIndex} total={steps.length} />
 
       <div className="flex-1 overflow-y-auto p-4">
@@ -262,7 +262,7 @@ function LandownerStep({
             onChange={(e) => onChange({ happyToBeContacted: e.target.checked })}
             className="h-5 w-5 rounded border-slate-300"
           />
-          Happy for AireStop to contact you about this site?
+          Happy for AireStop to contact you about this stop?
         </label>
       )}
 

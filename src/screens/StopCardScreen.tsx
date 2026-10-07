@@ -19,7 +19,7 @@ const PLACE_LABEL: Record<string, string> = {
   other: 'Other',
 }
 
-export function SiteCardScreen() {
+export function StopCardScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const nomination = useAppStore((s) => s.nominations.find((n) => n.id === id))
@@ -36,9 +36,9 @@ export function SiteCardScreen() {
   if (!nomination) {
     return (
       <div className="flex h-dvh flex-col">
-        <ScreenHeader title="Site not found" />
+        <ScreenHeader title="Stop not found" />
         <p className="p-4 text-sm text-slate-600">
-          This site isn't in the prototype's demo data.{' '}
+          This stop isn't in the prototype's demo data.{' '}
           <button className="text-brand-700 underline" onClick={() => navigate('/')}>
             Back to the map
           </button>
@@ -51,7 +51,7 @@ export function SiteCardScreen() {
 
   return (
     <div className="flex h-dvh flex-col bg-white">
-      <ScreenHeader title="Site" />
+      <ScreenHeader title="Stop" />
       <div className="flex-1 overflow-y-auto p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
           {STATUS_LABEL[nomination.status]}

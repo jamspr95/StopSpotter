@@ -33,7 +33,7 @@ export interface DraftNomination {
 
 interface DraftVote {
   nominationId: string
-  /** Only asked when the site's owner isn't yet known — see docs/BUILD_PLAN.md. */
+  /** Only asked when the stop's owner isn't yet known — see docs/BUILD_PLAN.md. */
   ownerType?: OwnerType
   landowner?: DraftNomination['landowner']
   payBand?: PayBand
@@ -162,7 +162,7 @@ export const useAppStore = create<AppState>()(
             criteria: scoreNomination(answers),
             ownershipHint:
               answers.ownerType === 'i_own_it'
-                ? 'Nominator says they own this site'
+                ? 'Nominator says they own this stop'
                 : 'No ownership hint yet (site finder check runs in Milestone 2)',
             landowner: d.landowner,
             status: 'submitted',
@@ -175,7 +175,7 @@ export const useAppStore = create<AppState>()(
 
           if (anonymous) {
             // Anonymous nominations stay unverified permanently in this prototype —
-            // there's no email to confirm. They're still saved as site data.
+            // there's no email to confirm. They're still saved as stop data.
             set({ pendingFlow: null })
           } else {
             set({

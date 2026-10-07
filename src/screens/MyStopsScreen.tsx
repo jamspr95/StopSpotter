@@ -10,7 +10,7 @@ const STATUS_LABEL: Record<string, string> = {
   not_suitable: 'Not suitable',
 }
 
-export function MySpotsScreen() {
+export function MyStopsScreen() {
   const navigate = useNavigate()
   const currentUser = useAppStore((s) => s.currentUser)
   const allNominations = useAppStore((s) => s.nominations)
@@ -22,17 +22,17 @@ export function MySpotsScreen() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <ScreenHeader title="My spots" />
+      <ScreenHeader title="My Stops" />
       <div className="flex-1 overflow-y-auto p-4">
         {!currentUser && (
           <p className="text-sm text-slate-500">
-            Nominate or vote on a site and sign up to see it here.
+            Nominate or vote on a stop and sign up to see it here.
           </p>
         )}
 
         {currentUser && nominations.length === 0 && votes.length === 0 && (
           <p className="text-sm text-slate-500">
-            Nothing yet — nominate a site or vote on one from the map.
+            Nothing yet — nominate a stop or vote on one from the map.
           </p>
         )}
 
@@ -43,7 +43,7 @@ export function MySpotsScreen() {
               {nominations.map((n) => (
                 <li key={n.id}>
                   <button
-                    onClick={() => navigate(`/site/${n.id}`)}
+                    onClick={() => navigate(`/stop/${n.id}`)}
                     className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left"
                   >
                     <span className="text-sm text-slate-800">
@@ -65,15 +65,15 @@ export function MySpotsScreen() {
             <h2 className="mb-2 text-sm font-semibold text-slate-500">Votes</h2>
             <ul className="flex flex-col gap-2">
               {votes.map((v) => {
-                const site = allNominations.find((n) => n.id === v.nominationId)
+                const stop = allNominations.find((n) => n.id === v.nominationId)
                 return (
                   <li key={v.id}>
                     <button
-                      onClick={() => navigate(`/site/${v.nominationId}`)}
+                      onClick={() => navigate(`/stop/${v.nominationId}`)}
                       className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left"
                     >
                       <span className="text-sm text-slate-800">
-                        {site ? site.answers.placeType.replace('_', ' ') : 'Site'}
+                        {stop ? stop.answers.placeType.replace('_', ' ') : 'Stop'}
                       </span>
                       <span className="text-xs font-medium text-brand-700">
                         {v.verified ? 'Counted' : 'Pending verification'}

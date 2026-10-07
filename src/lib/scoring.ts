@@ -2,7 +2,7 @@ import type { CriteriaResult, NominationAnswers } from '../types'
 
 /**
  * Criteria scoring from docs/BUILD_PLAN.md "Nomination form (8 questions +
- * scoring)". A "fails" answer still saves the site (flagged, not rejected) —
+ * scoring)". A "fails" answer still saves the stop (flagged, not rejected) —
  * nominators may be wrong about ground conditions from a phone photo.
  */
 export function scoreNomination(answers: NominationAnswers): CriteriaResult {

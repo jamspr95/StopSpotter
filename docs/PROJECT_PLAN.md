@@ -17,15 +17,15 @@
 ## What StopSpotter is
 
 StopSpotter is a mobile-first map where AireStop supporters nominate and vote
-for potential aire sites across England, Wales and Scotland. The MVP has
+for potential aire stops across England, Wales and Scotland. The MVP has
 three jobs:
 
-1. Build a database of candidate sites on any land, public or private.
+1. Build a database of candidate stops on any land, public or private.
 2. Produce demand evidence by council area.
 3. Grow a consented supporter list.
 
 **The problem it solves:** AireStop needs two things it can't easily buy —
-good site leads and proof that motorhomers want aires in specific places.
+good stop leads and proof that motorhomers want aires in specific places.
 Councils often don't know what land they own, and supporters on social media
 have no low-effort way to help beyond donating. StopSpotter turns supporters
 into scouts; every nomination and vote becomes evidence for a conversation
@@ -43,8 +43,8 @@ These are proposed starting points to validate, not commitments.
 | Goal | Measure | Proposed target |
 |---|---|---|
 | Engagement | Facebook click → sign-up rate | 15% |
-| Site data | Nominations submitted | 300 |
-| Site quality | Nominations passing the basic criteria check | 50% |
+| Stop data | Nominations submitted | 300 |
+| Stop quality | Nominations passing the basic criteria check | 50% |
 | Demand evidence | Council areas with 25+ "I'd stay here" votes | 10 |
 | Supporter list | Sign-ups opting in to marketing | 40% |
 | Conversion | Opted-in users who become backers or supporters | 3% |
@@ -57,15 +57,15 @@ These are proposed starting points to validate, not commitments.
 |---|---|---|
 | Supporter (motorhomer) | Back a place they'd love to stay; see others agree | Nominates, votes, shares, may back AireStop |
 | Casual visitor | See what's been suggested near them | Browses without signing up |
-| AireStop admin (Jamie) | Usable site leads and demand evidence | Reviews, scores, moves sites through a pipeline, exports reports |
+| AireStop admin (Jamie) | Usable stop leads and demand evidence | Reviews, scores, moves stops through a pipeline, exports reports |
 | Landowner (council, public body, business or private owner) | Proof of demand before committing land | Receives exported reports; no login in MVP |
 
 ## Design principles
 
 1. **Look free, sign up to act.** Anyone can browse the map; email is asked for only at the first nomination or vote.
 2. **Under 60 seconds to first contribution**, on a phone.
-3. **Ask about the site, not the person.** Every form question maps to a site criterion; personal data stops at email.
-4. **Protect sites before they're secured.** Exact locations stay private; the public sees approximate markers.
+3. **Ask about the stop, not the person.** Every form question maps to a stop criterion; personal data stops at email.
+4. **Protect stops before they're secured.** Exact locations stay private; the public sees approximate markers.
 5. **Consent is separate and explicit.** Using the tool never depends on agreeing to marketing.
 6. **Close the loop.** Contributors hear what happened to their nomination, which is also the route to support.
 
@@ -75,12 +75,12 @@ These are proposed starting points to validate, not commitments.
 
 ### In scope for the MVP
 - Public map with approximate markers and council-area heat view
-- Nominate a site (pin drop + 8-question form + optional landowner lead capture)
+- Nominate a stop (pin drop + 8-question form + optional landowner lead capture)
 - Vote on an existing nomination ("I'd stay here" + price band)
 - Magic-link sign-up with explicit, separable marketing/support consent
 - Automatic moderation (AI content check) with a manual review queue for flagged items
 - Anti-gaming controls (duplicate-to-vote, verified-email voting, rate caps, disposable-email blocking)
-- Admin pipeline view (site list, status, moderation queue) and council/landowner demand report (PDF/CSV)
+- Admin pipeline view (stop list, status, moderation queue) and council/landowner demand report (PDF/CSV)
 - Integration with AireStop's existing site finder on one shared target list
 
 ### Out of scope for the MVP
@@ -122,7 +122,7 @@ strongest candidate for version two, once moderation capacity is clear.
 | See `docs/BUILD_PLAN.md` § Milestone 2 | ⬜ |
 
 ### Milestone 3 — Admin and reporting
-> Goal: site list, status pipeline, moderation queue, supporter export, council demand report.
+> Goal: stop list, status pipeline, moderation queue, supporter export, council demand report.
 
 | Task | Status |
 |---|---|
@@ -150,13 +150,13 @@ strongest candidate for version two, once moderation capacity is clear.
 ## Relationship to the site finder
 
 StopSpotter and AireStop's public-land site finder run on one shared list of
-target sites, so every lead has a single record whichever tool found it:
+target stops, so every lead has a single record whichever tool found it:
 
 1. **One shared targets table** — site finder candidates and StopSpotter nominations live together, tagged by source (`site finder`, `user`, or `both`).
 2. **The site finder seeds the map** — candidates passing hard criteria (size, 20m from houses, slope) appear as "Suggested by AireStop" markers in a distinct style, released in small batches per area so they don't crowd out user pins.
 3. **StopSpotter feeds the site finder** — every user pin runs through the site finder's automatic checks (size, distance to housing, slope, likely public ownership).
-4. **Matches merge** — a user pin within 200m of a site finder candidate joins that record; a site found by both is a stronger lead.
-5. **One priority score** — ranks targets on site fit, demand (verified votes and price bands) and whether the owner is known. The top of the list flows into the sales pipeline, which drives public status updates.
+4. **Matches merge** — a user pin within 200m of a site finder candidate joins that record; a stop found by both is a stronger lead.
+5. **One priority score** — ranks targets on stop fit, demand (verified votes and price bands) and whether the owner is known. The top of the list flows into the sales pipeline, which drives public status updates.
 
 ---
 
@@ -171,7 +171,8 @@ target sites, so every lead has a single record whichever tool found it:
 | Sales pipeline | **Brevo CRM (Deals module)** — reuses the existing Brevo account rather than adding a new tool. Deals carry the pipeline stages; Brevo is the system of record for status, and a webhook pushes stage changes into StopSpotter. Landowner-only deals get a non-marketing Brevo contact (separate list, excluded from all marketing automations); outreach still happens from Gmail, not Brevo email. |
 | Site finder | Works in tandem with StopSpotter on one shared target list |
 | Local voters | Not separated out — the aim is attracting visitor spend, and locals rarely use aires |
-| Support screen phasing | At launch, no crowdfunder exists yet, so the Support screen's primary ask is "Spot a site", not backing AireStop. Supporter tier/crowdfunder links come back once the crowdfunder launches — the screen keeps a "Coming soon" note in the meantime rather than a dead CTA. |
+| Support screen phasing | At launch, no crowdfunder exists yet, so the Support screen's primary ask is "Spot a stop", not backing AireStop. Supporter tier/crowdfunder links come back once the crowdfunder launches — the screen keeps a "Coming soon" note in the meantime rather than a dead CTA. |
+| Terminology: Stop, not Site | A nominated place is a **stop**, not a "site" — matches how motorhomers actually talk about aires. "Spot" stays a verb only (the act of finding/nominating — "spot a stop"), never a noun for the place itself. Applied throughout the app's UI text and routes (`/stop/:id`, `/my-stops`); "site finder" is unaffected, since that's the name of AireStop's separate land-finding tool, not this usage. |
 
 ## Open questions
 
