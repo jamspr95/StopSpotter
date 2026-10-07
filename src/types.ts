@@ -6,7 +6,7 @@ export type OwnerType =
   | 'i_own_it'
   | 'dont_know'
 
-export type HowKnown = 'i_own_it' | 'i_know_them' | 'public_information'
+export type HowKnown = 'i_own_it' | 'i_know_them' | 'public_information' | 'dont_know'
 
 export type PayBand = 'free_only' | 'up_to_10' | '10_15' | '15_20' | '20_plus'
 

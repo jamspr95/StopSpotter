@@ -109,4 +109,5 @@ export const howKnownOptions: Option[] = [
   { value: 'i_own_it', label: 'I own it' },
   { value: 'i_know_them', label: 'I know them' },
   { value: 'public_information', label: 'Public information (a sign, a website)' },
+  { value: 'dont_know', label: "I don't know" },
 ]
