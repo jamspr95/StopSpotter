@@ -17,7 +17,7 @@ export function SupportScreen() {
 
         <a
           href="#"
-          className="mt-5 block w-full rounded-xl bg-teal-600 py-3.5 text-center text-base font-semibold text-white"
+          className="mt-5 block w-full rounded-xl bg-brand-600 py-3.5 text-center text-base font-semibold text-white"
         >
           Become a supporter
         </a>

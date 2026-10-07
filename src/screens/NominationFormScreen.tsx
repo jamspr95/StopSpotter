@@ -97,7 +97,7 @@ export function NominationFormScreen() {
 
         {step.kind === 'why_here' && (
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Why here? (optional)</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-900">Why here? (optional)</h2>
             <p className="mt-1 text-sm text-slate-500">
               Up to 280 characters. Shown on the public card once reviewed.
             </p>
@@ -115,7 +115,7 @@ export function NominationFormScreen() {
                 updateNominationDraft({ whyHere: whyHereDraft || undefined })
                 goNext()
               }}
-              className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+              className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
             >
               Continue
             </button>
@@ -124,7 +124,7 @@ export function NominationFormScreen() {
 
         {step.kind === 'demand' && (
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Would you stay here?</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-900">Would you stay here?</h2>
             <div className="mt-3">
               <ChoiceButtons
                 options={payBandOptions}
@@ -162,7 +162,7 @@ function QuestionStep({
     const selected = Array.isArray(currentAnswer) ? (currentAnswer as string[]) : []
     return (
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">{q.prompt}</h2>
+        <h2 className="font-display text-lg font-semibold text-slate-900">{q.prompt}</h2>
         {q.hint && <p className="mt-1 text-sm text-slate-500">{q.hint}</p>}
         <div className="mt-3">
           <ChoiceButtons
@@ -181,7 +181,7 @@ function QuestionStep({
           type="button"
           onClick={onNext}
           disabled={selected.length === 0}
-          className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
         >
           Continue
         </button>
@@ -191,7 +191,7 @@ function QuestionStep({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-slate-900">{q.prompt}</h2>
+      <h2 className="font-display text-lg font-semibold text-slate-900">{q.prompt}</h2>
       {q.hint && <p className="mt-1 text-sm text-slate-500">{q.hint}</p>}
       <div className="mt-3">
         <ChoiceButtons
@@ -215,7 +215,7 @@ function LandownerStep({
 }) {
   return (
     <div>
-      <h2 className="text-lg font-semibold text-slate-900">A bit about the owner</h2>
+      <h2 className="font-display text-lg font-semibold text-slate-900">A bit about the owner</h2>
       <p className="mt-1 text-sm text-slate-500">
         This is kept private and used for outreach only — never shown publicly.
       </p>
@@ -269,7 +269,7 @@ function LandownerStep({
       <button
         type="button"
         onClick={onNext}
-        className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+        className="mt-6 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
       >
         Continue
       </button>

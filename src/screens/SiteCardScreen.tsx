@@ -39,7 +39,7 @@ export function SiteCardScreen() {
         <ScreenHeader title="Site not found" />
         <p className="p-4 text-sm text-slate-600">
           This site isn't in the prototype's demo data.{' '}
-          <button className="text-teal-700 underline" onClick={() => navigate('/')}>
+          <button className="text-brand-700 underline" onClick={() => navigate('/')}>
             Back to the map
           </button>
         </p>
@@ -53,10 +53,10 @@ export function SiteCardScreen() {
     <div className="flex h-dvh flex-col bg-white">
       <ScreenHeader title="Site" />
       <div className="flex-1 overflow-y-auto p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+        <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
           {STATUS_LABEL[nomination.status]}
         </p>
-        <h2 className="mt-1 text-xl font-bold text-slate-900">
+        <h2 className="font-display mt-1 text-xl font-bold text-slate-900">
           {PLACE_LABEL[nomination.answers.placeType]}
         </h2>
         <p className="mt-1 text-sm text-slate-500">{nomination.councilArea}</p>
@@ -74,17 +74,17 @@ export function SiteCardScreen() {
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-4 rounded-xl bg-teal-50 p-3">
+        <div className="mt-4 flex items-center gap-4 rounded-xl bg-brand-50 p-3">
           <div>
-            <p className="text-2xl font-bold text-teal-800">{votes.length}</p>
-            <p className="text-xs text-teal-700">
+            <p className="text-2xl font-bold text-brand-800">{votes.length}</p>
+            <p className="text-xs text-brand-700">
               {votes.length === 1 ? 'vote' : 'votes'}
             </p>
           </div>
           {payShare !== null && (
             <div>
-              <p className="text-2xl font-bold text-teal-800">{payShare}%</p>
-              <p className="text-xs text-teal-700">would pay to stay</p>
+              <p className="text-2xl font-bold text-brand-800">{payShare}%</p>
+              <p className="text-xs text-brand-700">would pay to stay</p>
             </div>
           )}
         </div>
@@ -97,7 +97,7 @@ export function SiteCardScreen() {
             beginVote(nomination.id)
             navigate('/vote')
           }}
-          className="w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+          className="w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
         >
           I'd stay here
         </button>

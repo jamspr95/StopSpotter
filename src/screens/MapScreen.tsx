@@ -10,7 +10,7 @@ export function MapScreen() {
   const nominations = useAppStore((s) => s.nominations)
   const hasSeenIntro = useAppStore((s) => s.hasSeenIntro)
   const markIntroSeen = useAppStore((s) => s.markIntroSeen)
-  const [satellite, setSatellite] = useState(false)
+  const [satellite, setSatellite] = useState(true)
 
   const totalSpotted = useMemo(
     // SEED_TOTAL_SPOTTED already accounts for the demo markers in seedNominations,
@@ -21,8 +21,8 @@ export function MapScreen() {
 
   return (
     <div className="relative flex h-dvh flex-col">
-      <header className="z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <span className="text-lg font-bold text-teal-700">StopSpotter</span>
+      <header className="z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <span className="font-display text-lg font-bold text-brand-700">StopSpotter</span>
         <nav className="flex gap-4 text-sm font-medium text-slate-600">
           <Link to="/my-spots">My spots</Link>
           <Link to="/support">Support</Link>
@@ -47,7 +47,7 @@ export function MapScreen() {
                   <button
                     type="button"
                     onClick={() => navigate(`/site/${n.id}`)}
-                    className="font-semibold text-teal-700 underline"
+                    className="font-semibold text-brand-700 underline"
                   >
                     View site
                   </button>
@@ -68,7 +68,7 @@ export function MapScreen() {
         <button
           type="button"
           onClick={() => navigate('/spot')}
-          className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full bg-teal-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg active:bg-teal-700"
+          className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg active:bg-brand-700"
         >
           Spot a site
         </button>
@@ -76,7 +76,9 @@ export function MapScreen() {
         {!hasSeenIntro && (
           <div className="absolute inset-0 z-30 flex items-end bg-slate-900/40 p-4">
             <div className="w-full rounded-2xl bg-white p-5 shadow-xl">
-              <h2 className="text-lg font-bold text-slate-900">Help find the next aire</h2>
+              <h2 className="font-display text-lg font-bold text-slate-900">
+                Help find the next aire
+              </h2>
               <p className="mt-2 text-sm text-slate-600">
                 See a spot that would make a good motorhome stop? Drop a pin and tell us about
                 it, or vote on spots other people have already found. Anyone can browse — we
@@ -85,7 +87,7 @@ export function MapScreen() {
               <button
                 type="button"
                 onClick={markIntroSeen}
-                className="mt-4 w-full rounded-xl bg-teal-600 py-3 text-base font-semibold text-white active:bg-teal-700"
+                className="mt-4 w-full rounded-xl bg-brand-600 py-3 text-base font-semibold text-white active:bg-brand-700"
               >
                 Got it
               </button>

@@ -40,7 +40,7 @@ export function DoneShareScreen() {
         <button
           type="button"
           onClick={handleShare}
-          className="mt-5 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+          className="mt-5 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
         >
           {copied ? 'Copied — paste it anywhere' : 'Share'}
         </button>
@@ -56,7 +56,7 @@ export function DoneShareScreen() {
         <button
           type="button"
           onClick={() => navigate('/support')}
-          className="mt-3 w-full text-center text-sm font-medium text-teal-700 underline"
+          className="mt-3 w-full text-center text-sm font-medium text-brand-700 underline"
         >
           See how you can back AireStop
         </button>

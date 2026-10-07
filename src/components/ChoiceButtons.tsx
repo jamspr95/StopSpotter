@@ -19,7 +19,7 @@ export function ChoiceButtons({ options, multi = false, selected, onToggle }: Pr
             onClick={() => onToggle(opt.value)}
             className={`flex items-center justify-between rounded-xl border px-4 py-3.5 text-left text-base transition-colors ${
               isSelected
-                ? 'border-teal-600 bg-teal-50 text-teal-900'
+                ? 'border-brand-600 bg-brand-50 text-brand-900'
                 : 'border-slate-200 bg-white text-slate-800 active:bg-slate-50'
             }`}
           >
@@ -27,7 +27,7 @@ export function ChoiceButtons({ options, multi = false, selected, onToggle }: Pr
             {multi && (
               <span
                 className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                  isSelected ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-300'
+                  isSelected ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300'
                 }`}
               >
                 {isSelected ? '✓' : ''}

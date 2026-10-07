@@ -30,14 +30,14 @@ export function SatelliteToggle({
       <button
         type="button"
         onClick={() => onChange(false)}
-        className={`px-3 py-1.5 ${satellite ? 'text-slate-600' : 'bg-teal-600 text-white'}`}
+        className={`px-3 py-1.5 ${satellite ? 'text-slate-600' : 'bg-brand-600 text-white'}`}
       >
         Map
       </button>
       <button
         type="button"
         onClick={() => onChange(true)}
-        className={`px-3 py-1.5 ${satellite ? 'bg-teal-600 text-white' : 'text-slate-600'}`}
+        className={`px-3 py-1.5 ${satellite ? 'bg-brand-600 text-white' : 'text-slate-600'}`}
       >
         Satellite
       </button>

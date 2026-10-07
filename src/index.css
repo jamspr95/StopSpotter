@@ -1,6 +1,23 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+@theme {
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Comfortaa', 'Montserrat', ui-sans-serif, sans-serif;
+
+  /* AireStop brand colour (#A10385), tinted/shaded for a full UI scale. */
+  --color-brand-50: #faf2f9;
+  --color-brand-100: #f6e6f3;
+  --color-brand-200: #e8c0e1;
+  --color-brand-300: #d99ace;
+  --color-brand-400: #c768b6;
+  --color-brand-500: #b4359d;
+  --color-brand-600: #a10385;
+  --color-brand-700: #890371;
+  --color-brand-800: #71025d;
+  --color-brand-900: #590249;
+}
+
 html,
 body,
 #root {
@@ -9,5 +26,6 @@ body,
 
 body {
   margin: 0;
+  font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
 }

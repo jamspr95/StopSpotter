@@ -61,7 +61,7 @@ export function VoteScreen() {
 
         {step === 'owner' && (
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">{ownerQuestion.prompt}</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-900">{ownerQuestion.prompt}</h2>
             <p className="mt-1 text-sm text-slate-500">
               The owner isn't known yet — your answer helps establish it.
             </p>
@@ -88,7 +88,7 @@ export function VoteScreen() {
 
         {step === 'pay_band' && (
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Would you stay here?</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-900">Would you stay here?</h2>
             <div className="mt-3">
               <ChoiceButtons
                 options={payBandOptions}
@@ -117,7 +117,7 @@ function LandownerStep({
 }) {
   return (
     <div>
-      <h2 className="text-lg font-semibold text-slate-900">A bit about the owner</h2>
+      <h2 className="font-display text-lg font-semibold text-slate-900">A bit about the owner</h2>
       <p className="mt-1 text-sm text-slate-500">Kept private — used for outreach only.</p>
 
       <label className="mt-4 block text-sm font-medium text-slate-700">
@@ -142,7 +142,7 @@ function LandownerStep({
       <button
         type="button"
         onClick={onNext}
-        className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+        className="mt-6 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
       >
         Continue
       </button>

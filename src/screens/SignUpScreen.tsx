@@ -50,7 +50,7 @@ export function SignUpScreen() {
               confirmMagicLink()
               navigate('/done', { state: { flowType: isNomination ? 'nomination' : 'vote' } })
             }}
-            className="mt-4 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+            className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
           >
             Simulate magic-link click
           </button>
@@ -115,7 +115,7 @@ export function SignUpScreen() {
           type="button"
           disabled={!emailValid}
           onClick={() => finalizePendingFlow({ email, firstName: firstName || undefined, news, support })}
-          className="mt-6 w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-6 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
         >
           Send my link
         </button>

@@ -22,7 +22,7 @@ function CenterTracker({ onMove }: { onMove: (centre: LatLng) => void }) {
 export function DropPinScreen() {
   const navigate = useNavigate()
   const mapRef = useRef<LeafletMap | null>(null)
-  const [satellite, setSatellite] = useState(false)
+  const [satellite, setSatellite] = useState(true)
   const [centre, setCentre] = useState<LatLng>(MAP_CENTRE)
   const [locating, setLocating] = useState(false)
   const nominations = useAppStore((s) => s.nominations)
@@ -106,7 +106,7 @@ export function DropPinScreen() {
         <button
           type="button"
           onClick={handleConfirm}
-          className="w-full rounded-xl bg-teal-600 py-3.5 text-base font-semibold text-white active:bg-teal-700"
+          className="w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
         >
           Confirm location
         </button>

@@ -49,7 +49,7 @@ export function MySpotsScreen() {
                     <span className="text-sm text-slate-800">
                       {n.answers.placeType.replace('_', ' ')}
                     </span>
-                    <span className="text-xs font-medium text-teal-700">
+                    <span className="text-xs font-medium text-brand-700">
                       {STATUS_LABEL[n.status]}
                       {!n.verified && ' · unverified'}
                     </span>
@@ -75,7 +75,7 @@ export function MySpotsScreen() {
                       <span className="text-sm text-slate-800">
                         {site ? site.answers.placeType.replace('_', ' ') : 'Site'}
                       </span>
-                      <span className="text-xs font-medium text-teal-700">
+                      <span className="text-xs font-medium text-brand-700">
                         {v.verified ? 'Counted' : 'Pending verification'}
                       </span>
                     </button>
