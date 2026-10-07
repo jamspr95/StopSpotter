@@ -59,7 +59,15 @@ export function StopCardScreen() {
         <h2 className="font-display mt-1 text-xl font-bold text-slate-900">
           {PLACE_LABEL[nomination.answers.placeType]}
         </h2>
-        <p className="mt-1 text-sm text-slate-500">{nomination.councilArea}</p>
+        {/* A friendly approximate area (town/village), not the formal
+            council/LPA boundary — that one's still Milestone 2 work
+            (councilArea/council_area_for_point) and isn't something a
+            nominator or voter needs to see; it stays admin-only. No
+            placeholder when the lookup has nothing — silence reads better
+            here than an apologetic "to be confirmed" line. */}
+        {nomination.areaLabel && (
+          <p className="mt-1 text-sm text-slate-500">Near {nomination.areaLabel}</p>
+        )}
 
         {nomination.whyHere && (
           <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm italic text-slate-700">

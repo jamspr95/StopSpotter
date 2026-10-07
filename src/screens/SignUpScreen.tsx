@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
 import type { SSOProvider } from '../lib/db'
 import { isDisposableEmail } from '../lib/disposableEmail'
-import { isSupabaseConfigured } from '../lib/supabaseClient'
+import { isSSOEnabled, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 
 const SSO_PROVIDERS: Array<{ id: SSOProvider; label: string }> = [
@@ -141,7 +141,7 @@ export function SignUpScreen() {
         }}
       />
       <div className="flex-1 overflow-y-auto p-4">
-        {isSupabaseConfigured && (
+        {isSupabaseConfigured && isSSOEnabled && (
           <>
             <div className="flex flex-col gap-2">
               {SSO_PROVIDERS.map((p) => (

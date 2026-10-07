@@ -21,6 +21,7 @@ function makeAnswers(partial: Partial<NominationAnswers>): NominationAnswers {
 function seedNomination(
   id: string,
   offset: { lat: number; lng: number },
+  areaLabel: string,
   whyHere: string,
   answers: NominationAnswers,
   payBand: Nomination['payBand'],
@@ -33,6 +34,7 @@ function seedNomination(
     exact,
     public: snapToPublicGrid(exact),
     councilArea: 'Council area — to be confirmed (needs ONS boundary data, Milestone 2)',
+    areaLabel,
     answers,
     whyHere,
     payBand,
@@ -49,6 +51,7 @@ export const seedNominations: Nomination[] = [
   seedNomination(
     'seed-1',
     { lat: 0.04, lng: 0.06 },
+    'Stratford-upon-Avon',
     'Flat field behind the pub, farmer said walkers already use the gate.',
     makeAnswers({ placeType: 'grass_field', nearby: ['pub', 'shop'], water: 'water_tap' }),
     'up_to_10',
@@ -57,6 +60,7 @@ export const seedNominations: Nomination[] = [
   seedNomination(
     'seed-2',
     { lat: -0.03, lng: 0.09 },
+    'Wilmcote',
     'Old lay-by on the edge of the village, room for a few vans.',
     makeAnswers({ placeType: 'lay_by', nearby: ['none'], roomForFive: 'not_sure' }),
     'free_only',
@@ -65,6 +69,7 @@ export const seedNominations: Nomination[] = [
   seedNomination(
     'seed-3',
     { lat: 0.07, lng: -0.05 },
+    'Bidford-on-Avon',
     'Council-owned car park that empties out after 6pm.',
     makeAnswers({ placeType: 'car_park', ownerType: 'council', nearby: ['town_centre', 'shop'] }),
     '10_15',
@@ -73,6 +78,7 @@ export const seedNominations: Nomination[] = [
   seedNomination(
     'seed-4',
     { lat: -0.06, lng: -0.04 },
+    'Welford-on-Avon',
     "Farmer's own paddock, right by the river trail.",
     makeAnswers({
       placeType: 'unused_land',

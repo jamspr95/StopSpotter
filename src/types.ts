@@ -51,6 +51,8 @@ export interface Nomination {
   exact: LatLng
   public: LatLng
   councilArea: string
+  /** Friendly "near <town/village>" label for the public card — see src/lib/geocode.ts. Null if the reverse-geocode lookup failed or hasn't run (older rows). */
+  areaLabel: string | null
   answers: NominationAnswers
   whyHere?: string
   payBand: PayBand
@@ -98,6 +100,7 @@ export interface AdminNomination {
   exact: LatLng
   public: LatLng
   councilArea: string | null
+  areaLabel: string | null
   answers: NominationAnswers
   whyHere?: string
   payBand: PayBand

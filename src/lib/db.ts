@@ -123,6 +123,7 @@ interface PublicNominationRow {
   public_lat: number
   public_lng: number
   council_area: string | null
+  area_label: string | null
   place_type: NominationAnswers['placeType']
   nearby: NominationAnswers['nearby']
   why_here: string | null
@@ -148,6 +149,7 @@ function publicRowToNomination(row: PublicNominationRow): Nomination {
     exact: point,
     public: point,
     councilArea: row.council_area ?? PLACEHOLDER_COUNCIL_AREA,
+    areaLabel: row.area_label,
     answers: {
       placeType: row.place_type,
       ownerType: 'dont_know',
@@ -210,6 +212,7 @@ export interface NominationInsert {
   exact: LatLng
   public: LatLng
   councilArea: string
+  areaLabel: string | null
   answers: NominationAnswers
   whyHere?: string
   payBand: PayBand
@@ -227,6 +230,7 @@ export async function insertNomination(input: NominationInsert): Promise<string>
       exact_location: toWKT(input.exact),
       public_location: toWKT(input.public),
       council_area: input.councilArea,
+      area_label: input.areaLabel,
       place_type: input.answers.placeType,
       owner_type: input.answers.ownerType,
       nearest_house: input.answers.nearestHouse,
@@ -305,6 +309,7 @@ interface MyNominationRow {
   public_lat: number
   public_lng: number
   council_area: string | null
+  area_label: string | null
   place_type: NominationAnswers['placeType']
   owner_type: NominationAnswers['ownerType']
   nearest_house: NominationAnswers['nearestHouse']
@@ -331,6 +336,7 @@ export async function fetchMyNominations(userId: string): Promise<Nomination[]> 
     exact: { lat: row.exact_lat, lng: row.exact_lng },
     public: { lat: row.public_lat, lng: row.public_lng },
     councilArea: row.council_area ?? PLACEHOLDER_COUNCIL_AREA,
+    areaLabel: row.area_label,
     answers: {
       placeType: row.place_type,
       ownerType: row.owner_type,
@@ -468,6 +474,7 @@ interface AdminNominationRow {
   public_lat: number
   public_lng: number
   council_area: string | null
+  area_label: string | null
   place_type: NominationAnswers['placeType']
   owner_type: NominationAnswers['ownerType']
   nearest_house: NominationAnswers['nearestHouse']
@@ -496,6 +503,7 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     exact: { lat: row.exact_lat, lng: row.exact_lng },
     public: { lat: row.public_lat, lng: row.public_lng },
     councilArea: row.council_area,
+    areaLabel: row.area_label,
     answers: {
       placeType: row.place_type,
       ownerType: row.owner_type,

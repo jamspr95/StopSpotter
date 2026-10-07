@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import * as db from '../lib/db'
+import { reverseGeocodeAreaLabel } from '../lib/geocode'
 import { guessCouncilArea, snapToPublicGrid } from '../lib/geo'
 import { scoreNomination } from '../lib/scoring'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
@@ -169,6 +170,7 @@ function nominationFromDraft(
   draft: DraftNomination,
   verified: boolean,
   councilArea: string,
+  areaLabel: string | null,
 ): Nomination {
   const answers = draft.answers as NominationAnswers
   return {
@@ -177,6 +179,7 @@ function nominationFromDraft(
     exact: draft.pin,
     public: snapToPublicGrid(draft.pin),
     councilArea,
+    areaLabel,
     answers,
     whyHere: draft.whyHere,
     payBand: draft.payBand ?? 'free_only',
@@ -215,32 +218,36 @@ async function ensureNominationSaved(
   if (flow.draft.savedId) return flow.draft.savedId
   const draft = flow.draft
 
-  let id: string
-  let councilArea: string
-  if (isSupabaseConfigured) {
-    councilArea = await resolveCouncilArea(draft.pin)
-    id = await db.insertNomination({
-      userId: null,
-      exact: draft.pin,
-      public: snapToPublicGrid(draft.pin),
-      councilArea,
-      answers: draft.answers as NominationAnswers,
-      whyHere: draft.whyHere,
-      payBand: draft.payBand ?? 'free_only',
-      criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
-      criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
-      ownershipHint:
-        draft.answers.ownerType === 'i_own_it'
-          ? 'Nominator says they own this stop'
-          : 'No ownership hint yet (site finder check runs in Milestone 2)',
-      landowner: draft.landowner,
-    })
-  } else {
-    councilArea = guessCouncilArea(draft.pin)
-    id = `nom-${crypto.randomUUID()}`
-  }
+  // Independent lookups (one hits Supabase/falls back locally, the other
+  // always hits OSM's Nominatim directly) — run together rather than
+  // stacking their latency in series, since both are best-effort and
+  // neither depends on the other's result.
+  const [councilArea, areaLabel] = await Promise.all([
+    isSupabaseConfigured ? resolveCouncilArea(draft.pin) : Promise.resolve(guessCouncilArea(draft.pin)),
+    reverseGeocodeAreaLabel(draft.pin),
+  ])
 
-  const nomination = nominationFromDraft(id, null, draft, false, councilArea)
+  const id = isSupabaseConfigured
+    ? await db.insertNomination({
+        userId: null,
+        exact: draft.pin,
+        public: snapToPublicGrid(draft.pin),
+        councilArea,
+        areaLabel,
+        answers: draft.answers as NominationAnswers,
+        whyHere: draft.whyHere,
+        payBand: draft.payBand ?? 'free_only',
+        criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
+        criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
+        ownershipHint:
+          draft.answers.ownerType === 'i_own_it'
+            ? 'Nominator says they own this stop'
+            : 'No ownership hint yet (site finder check runs in Milestone 2)',
+        landowner: draft.landowner,
+      })
+    : `nom-${crypto.randomUUID()}`
+
+  const nomination = nominationFromDraft(id, null, draft, false, councilArea, areaLabel)
   const currentFlow = get().pendingFlow
   set({
     nominations: [...get().nominations, nomination],

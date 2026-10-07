@@ -79,23 +79,59 @@ confirmed unused.)
 The **Email** auth provider (magic link / OTP) is on by default for a new
 Supabase project — nothing to enable there.
 
-### A note on email sending
+### A note on email sending — fix the "this looks like spam" problem
 
-Supabase's own email sending (used for the OTP/magic link) is rate-limited
-and uses a shared sender on the free tier — fine for testing with a handful
-of supporters, but if sign-ups stall or emails don't arrive, check
-**Authentication → Rate Limits** and consider configuring a custom SMTP
-provider (**Authentication → Settings → SMTP Settings**) before a wider
-launch.
+Out of the box, Supabase sends the magic-link email itself, from its own
+shared sender (something like `noreply@mail.app.supabase.io`), using its
+own generic template copy. Testers have already flagged this — it doesn't
+look like it's from AireStop or StopSpotter, which is exactly the kind of
+thing that makes a real supporter distrust the email and ignore it. There
+isn't a way to fix this from a coding session — it needs two changes in
+the Supabase dashboard, plus an SMTP provider with a domain you can send
+from:
+
+1. **Get a transactional-email sender.** You need something that can send
+   as an address on a domain you control — e.g. `noreply@airestop.co.uk`
+   (if DNS for that domain is available to you) or a subdomain like
+   `stopspotter.airestop.co.uk`. Options: [Resend](https://resend.com)
+   (simplest to set up, has a free tier), Amazon SES, Postmark, SendGrid,
+   or Brevo's transactional email (if the Brevo account from §10 already
+   has it). Whichever you pick, you'll need to verify the sending domain
+   with it (usually adding a couple of DNS TXT/CNAME records) before it'll
+   actually deliver.
+2. **Point Supabase at it.** **Dashboard → Authentication → Settings →
+   SMTP Settings** → enable "Custom SMTP" → enter the host/port/username/
+   password your provider gave you in step 1, and set **Sender email** to
+   the address you verified (e.g. `noreply@airestop.co.uk`) and **Sender
+   name** to something recognisable, like `StopSpotter` or `AireStop`.
+3. **Rewrite the email template.** **Dashboard → Authentication → Email
+   Templates → Magic Link** — the default subject/body is generic
+   Supabase copy. Replace it with StopSpotter-branded wording (it accepts
+   basic HTML and the `{{ .ConfirmationURL }}` placeholder for the actual
+   link). Do this for any other templates you expect people to see (e.g.
+   "Confirm signup" if email confirmation is ever turned on).
+
+Until this is done, **the rate-limit note still applies too**: Supabase's
+shared sender is rate-limited and fine only for a handful of testers —
+check **Authentication → Rate Limits** if sign-ups stall.
 
 ## 6. Set up Google, Apple and Facebook sign-in (optional)
 
-The app shows "Continue with Google / Apple / Facebook" buttons on the
-sign-up screen whenever a backend is configured (step 4) — but each
-provider only actually works once you've enabled it in Supabase and set
-it up with that provider. Nothing breaks by skipping some or all of these:
-a provider that isn't enabled just shows an error if someone taps its
-button, and email magic-link keeps working regardless.
+**The "Continue with Google / Apple / Facebook" buttons are hidden by
+default** — a tester flagged that they were showing even though no
+provider was actually configured yet, so tapping one just failed. They're
+now gated behind a second flag on top of step 4's backend config:
+
+```
+VITE_SSO_ENABLED=true
+```
+
+Set this in `.env.local` for local development, and for the deployed
+build add it as a repo **variable** (not a secret — it's not sensitive) in
+**Settings → Secrets and variables → Actions → Variables tab**. Do this
+once **at least one** provider below is actually enabled and working.
+Leave it unset/`false` until then — email magic-link keeps working
+regardless either way.
 
 All three use the same Supabase-side redirect URL, which you'll enter on
 the provider's side as the "authorised redirect URI":
@@ -156,12 +192,24 @@ Because of the cost and setup time, Apple sign-in is the one most likely
 to be left for later — the Google and email options are enough to launch
 with.
 
-## 7. Load council boundaries (optional — can come later)
+## 7. Load council boundaries (optional — can come later, admin-only)
 
 The `council_boundaries` table and `council_area_for_point()` function are
 already in the schema, but the table starts empty — the app falls back to
 a placeholder label ("Council area — to be confirmed…") until it's loaded.
 Nothing breaks by skipping this for now.
+
+**This no longer shows on the public stop card** — a tester flagged the
+placeholder text as confusing, and the real council/LPA area isn't
+something a nominator or voter actually needs to see. The card now shows
+a friendly "Near \<town/village\>" label instead, resolved automatically
+via free reverse-geocoding the moment a stop is nominated (see
+`src/lib/geocode.ts`) — nothing to set up for that part. The formal
+council area is still recorded on every nomination and still shown in the
+**admin** dashboard (stop list, filters, PDF/CSV reports) — it's just
+needed there, for routing the real statutory LPA consultation later, not
+on the public-facing card. Loading the boundary data below is what makes
+that admin-side value accurate instead of the placeholder.
 
 To load it:
 1. Download the ONS "Local Authority Districts" boundary data (generalised,

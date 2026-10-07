@@ -31,6 +31,10 @@ jobs:
           # then just runs in local-only mode, same as Milestone 1.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Not a secret (just a feature flag) — set as a repo VARIABLE
+          # (Settings -> Secrets and variables -> Actions -> Variables tab),
+          # not a secret, once SSO is actually configured in Supabase.
+          VITE_SSO_ENABLED: ${{ vars.VITE_SSO_ENABLED }}
       # GitHub Pages serves static files only — this lets client-side routes
       # (e.g. a direct load of /stop/:id) resolve instead of 404ing.
       - run: cp dist/index.html dist/404.html
