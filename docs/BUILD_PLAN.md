@@ -248,22 +248,22 @@ rationale. Engineering implications:
 
 | Task | Status |
 |---|---|
-| Provision Supabase project; enable PostGIS | ⬜ |
-| Create schema: `users`, `consents`, `nominations`, `landowner_leads`, `votes`, `status_history`, `moderation_reports` | ⬜ |
-| Load ONS local authority boundaries; council-area lookup from lat/lng | ⬜ |
-| Magic-link sign-in via Supabase Auth | ⬜ |
-| Real map with live nominations, approximate (snapped) public markers | ⬜ |
-| Nomination submit → pending record → confirmed on magic-link click | ⬜ |
-| Duplicate-pin detection (200m) → offer as vote | ⬜ |
-| Vote flow: verified-email-only, one vote per user per nomination, price band | ⬜ |
-| Consent recording: versioned wording + timestamp, never overwritten | ⬜ |
-| Criteria scoring logic (per question 1–7, pass/fail flags) | ⬜ |
-| Landowner follow-up fields + `landowner_leads` write | ⬜ |
-| Anti-gaming: disposable-email blocklist, 50/day nomination cap | ⬜ |
-| Automatic AI moderation check (offensive content, personal details, home/garden pins) on free text + new pins | ⬜ |
-| Share flow: prefilled Facebook share, deep link opens map at stop | ⬜ |
-| "My Stops" screen with status history | ⬜ |
-| Cookieless analytics + campaign tagging on share/post links | ⬜ |
+| Provision Supabase project; enable PostGIS | ⬜ External step — see `docs/SETUP.md`. The migration enables PostGIS itself once a project exists. |
+| Create schema: `users`, `consents`, `nominations`, `landowner_leads`, `votes`, `status_history`, `moderation_reports` | ✅ `supabase/migrations/0001_init.sql` — verified against a real local Postgres+PostGIS instance (RLS, column grants, triggers and RPCs all exercised under anon/authenticated roles, not just written) |
+| Load ONS local authority boundaries; council-area lookup from lat/lng | 🔄 `council_area_for_point()` RPC + empty `council_boundaries` table ready and wired into the write path; loading the real ONS data is a manual step in `docs/SETUP.md` §6 — falls back to the placeholder label until then |
+| Magic-link sign-in via Supabase Auth | ✅ Code path implemented (`sendMagicLink`, the auth-state listener, `completePendingSignIn`) — **cannot be verified live without a provisioned project**; local-only mode's simulated flow still works and was regression-tested |
+| Real map with live nominations, approximate (snapped) public markers | ✅ Via the `public_nominations` view (exact coordinates are not readable client-side by design — see the migration) |
+| Nomination submit → pending record → confirmed on magic-link click | ✅ The draft stays client-side (already localStorage-persisted) until a session exists post-redirect, then writes with `verified: true` directly — there's no separate unverified-then-verified DB state in real-backend mode, unlike local-only mode's simulate step |
+| Duplicate-pin detection (200m) → offer as vote | ✅ `find_nearby_nomination` RPC — required server-side since exact_location isn't client-readable; verified against the real schema |
+| Vote flow: verified-email-only, one vote per user per nomination, price band | ✅ Enforced at the DB level (`votes` RLS requires `auth.uid() = user_id`; `unique(user_id, nomination_id)`) — both confirmed with real inserts |
+| Consent recording: versioned wording + timestamp, never overwritten | ✅ Insert/select-only RLS, no update policy — confirmed an UPDATE is actually rejected, not just unoffered in the UI |
+| Criteria scoring logic (per question 1–7, pass/fail flags) | ✅ Unchanged from Milestone 1 (`src/lib/scoring.ts`), now also written to `criteria_score`/`criteria_flags` |
+| Landowner follow-up fields + `landowner_leads` write | ✅ Including the vote flow's case (owner was unknown) — becomes its own lead row rather than editing the nomination, since there's deliberately no UPDATE policy on `nominations` |
+| Anti-gaming: disposable-email blocklist, 50/day nomination cap | 🔄 50/day cap is a DB trigger, verified with a real 51-insert test (correctly blocks the 51st). Disposable-email blocklist is **not implemented** — needs either a client-side domain list or a Supabase Auth Hook; genuinely open |
+| Automatic AI moderation check (offensive content, personal details, home/garden pins) on free text + new pins | ⬜ Not implemented — needs a real AI/content-moderation call (no API wired for this yet). `moderation_reports` (user-submitted reports) is ready; the automatic check is separate and still open |
+| Share flow: prefilled Facebook share, deep link opens map at stop | ✅ Unchanged from Milestone 1 |
+| "My Stops" screen with status history | 🔄 Own nominations/votes now come from the real `get_my_nominations`/`get_my_votes` RPCs (full detail, not the column-limited public view). `status_history` table exists but nothing reads/writes it yet — that's the Milestone 3 admin pipeline's job |
+| Cookieless analytics + campaign tagging on share/post links | ⬜ Not started |
 
 ### Milestone 3 — Admin and reporting
 

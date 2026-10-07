@@ -119,7 +119,7 @@ strongest candidate for version two, once moderation capacity is clear.
 
 | Task | Status |
 |---|---|
-| See `docs/BUILD_PLAN.md` § Milestone 2 | ⬜ |
+| See `docs/BUILD_PLAN.md` § Milestone 2 | 🔄 Schema, data layer and auth code all built and locally verified; needs a real Supabase project provisioned (`docs/SETUP.md`) before it's live. Disposable-email blocklist and automatic AI moderation still open. |
 
 ### Milestone 3 — Admin and reporting
 > Goal: stop list, status pipeline, moderation queue, supporter export, council demand report.

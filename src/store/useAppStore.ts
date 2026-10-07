@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import * as db from '../lib/db'
 import { guessCouncilArea, snapToPublicGrid } from '../lib/geo'
 import { scoreNomination } from '../lib/scoring'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { seedNominations, seedVotes } from '../data/seed'
 import type {
   ConsentRecord,
@@ -14,6 +16,22 @@ import type {
   PayBand,
   Vote,
 } from '../types'
+
+/**
+ * Real-backend mode: asks the council_area_for_point RPC (Milestone 2's
+ * ONS-boundary lookup). Falls back to the same placeholder label as
+ * local-only mode when boundaries haven't been loaded yet (the RPC
+ * returns null) or the call fails — a lookup failure shouldn't block a
+ * nomination from saving.
+ */
+async function resolveCouncilArea(point: LatLng): Promise<string> {
+  if (!isSupabaseConfigured) return guessCouncilArea(point)
+  try {
+    return (await db.councilAreaForPoint(point)) ?? guessCouncilArea(point)
+  } catch {
+    return guessCouncilArea(point)
+  }
+}
 
 /** Bump this if the consent wording below changes — recorded on every consent so the list stays defensible later. */
 const CONSENT_WORDING_VERSION = '2026-10-v1'
@@ -57,9 +75,23 @@ interface AppState {
   votes: Vote[]
   currentUser: CurrentUser | null
   pendingFlow: PendingFlow
-  /** Id of the nomination/vote just created, awaiting the simulated magic-link click. */
+  /**
+   * Local-only mode: email/name/consent choices captured at "Send my link",
+   * held only long enough to build the simulated verification step.
+   * Real-backend mode: the SAME data, but held because nothing can be
+   * written yet — there's no session until the magic link is clicked and
+   * the browser redirects back (losing all in-memory state). It survives
+   * that via this store's own localStorage persistence; completePendingSignIn
+   * reads it back once a session exists.
+   */
+  pendingIdentity: Identity | null
+  /** Id of the nomination/vote just created, awaiting the simulated magic-link click (local-only mode only). */
   awaitingVerificationId: string | null
   awaitingVerificationKind: 'nomination' | 'vote' | null
+  /** Real-backend mode only: true once sendMagicLink() has been called, until completePendingSignIn() runs. */
+  awaitingMagicLink: boolean
+  /** True once initRealBackend()'s first fetch has resolved — screens can use this to show a loading state instead of an empty map. */
+  backendReady: boolean
 
   markIntroSeen: () => void
   beginNomination: (pin: LatLng) => void
@@ -67,9 +99,20 @@ interface AppState {
   beginVote: (nominationId: string) => void
   updateVoteDraft: (patch: Partial<DraftVote>) => void
   cancelPendingFlow: () => void
-  /** Creates the nomination/vote record. Anonymous (email === null) records are saved immediately as unverified; email-backed ones wait for confirmMagicLink(). */
-  finalizePendingFlow: (identity: Identity) => void
+  /**
+   * Local-only mode: creates the nomination/vote record immediately.
+   * Anonymous (email === null) records are saved right away as unverified;
+   * email-backed ones wait for confirmMagicLink().
+   * Real-backend mode: anonymous nominations are written immediately (no
+   * email to wait for, matches the local-only behaviour); email-backed
+   * flows call Supabase's real sendMagicLink() and wait for the redirect —
+   * see pendingIdentity above.
+   */
+  finalizePendingFlow: (identity: Identity) => Promise<void>
+  /** Local-only mode's simulated magic-link click. */
   confirmMagicLink: () => void
+  /** Real-backend mode only: fetches the live nominations/votes feed and wires up auth. Call once at startup. */
+  initRealBackend: () => Promise<void>
 }
 
 function buildConsents(identity: Identity): ConsentRecord[] {
@@ -80,16 +123,126 @@ function buildConsents(identity: Identity): ConsentRecord[] {
   ]
 }
 
+/**
+ * Builds the Nomination the local store has always produced from a draft —
+ * shared by local-only and the real backend's optimistic-append.
+ * councilArea is a parameter rather than resolved internally so the
+ * optimistic client-side object and the row actually written to the DB
+ * (see resolveCouncilArea's callers) agree with each other.
+ */
+function nominationFromDraft(
+  id: string,
+  userId: string | null,
+  draft: DraftNomination,
+  verified: boolean,
+  councilArea: string,
+): Nomination {
+  const answers = draft.answers as NominationAnswers
+  return {
+    id,
+    userId,
+    exact: draft.pin,
+    public: snapToPublicGrid(draft.pin),
+    councilArea,
+    answers,
+    whyHere: draft.whyHere,
+    payBand: draft.payBand ?? 'free_only',
+    criteria: scoreNomination(answers),
+    ownershipHint:
+      answers.ownerType === 'i_own_it'
+        ? 'Nominator says they own this stop'
+        : 'No ownership hint yet (site finder check runs in Milestone 2)',
+    landowner: draft.landowner,
+    status: 'submitted',
+    verified,
+    source: 'user',
+    createdAt: new Date().toISOString(),
+  }
+}
+
+/** Real-backend mode: writes whatever's in pendingFlow/pendingIdentity now that a session exists. Called from initRealBackend's auth listener. */
+async function completePendingSignIn(
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+  userId: string,
+  email: string,
+) {
+  const { pendingFlow, pendingIdentity } = get()
+  if (!pendingFlow || !pendingIdentity) return
+
+  await db.upsertProfile(userId, pendingIdentity.firstName, 'facebook')
+  const consents = buildConsents(pendingIdentity)
+  await db.insertConsents(userId, consents)
+
+  if (pendingFlow.type === 'nomination') {
+    const draft = pendingFlow.draft
+    const councilArea = await resolveCouncilArea(draft.pin)
+    const id = await db.insertNomination({
+      userId,
+      exact: draft.pin,
+      public: snapToPublicGrid(draft.pin),
+      councilArea,
+      answers: draft.answers as NominationAnswers,
+      whyHere: draft.whyHere,
+      payBand: draft.payBand ?? 'free_only',
+      criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
+      criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
+      ownershipHint:
+        draft.answers.ownerType === 'i_own_it'
+          ? 'Nominator says they own this stop'
+          : 'No ownership hint yet (site finder check runs in Milestone 2)',
+      landowner: draft.landowner,
+    })
+    const nomination = nominationFromDraft(id, userId, draft, true, councilArea)
+    set({ nominations: [...get().nominations, nomination] })
+  } else {
+    const draft = pendingFlow.draft
+    const voteId = await db.insertVote({
+      userId,
+      nominationId: draft.nominationId,
+      payBand: draft.payBand ?? 'free_only',
+    })
+    const vote: Vote = {
+      id: voteId,
+      userId,
+      nominationId: draft.nominationId,
+      payBand: draft.payBand ?? 'free_only',
+      verified: true,
+      createdAt: new Date().toISOString(),
+    }
+    set({ votes: [...get().votes, vote] })
+
+    // There's no UPDATE policy on nominations (admin/pipeline-only, by
+    // design — see the migration) so a voter's answer about an unknown
+    // owner becomes its own landowner_leads row rather than editing the
+    // nomination in place. Multiple leads per nomination is fine; admins
+    // see them all.
+    if (draft.landowner) {
+      await db.insertLandownerLead(draft.nominationId, draft.landowner)
+    }
+  }
+
+  set({
+    currentUser: { id: userId, email, firstName: pendingIdentity.firstName, verified: true, consents },
+    pendingFlow: null,
+    pendingIdentity: null,
+    awaitingMagicLink: false,
+  })
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       hasSeenIntro: false,
-      nominations: seedNominations,
-      votes: seedVotes,
+      nominations: isSupabaseConfigured ? [] : seedNominations,
+      votes: isSupabaseConfigured ? [] : seedVotes,
       currentUser: null,
       pendingFlow: null,
+      pendingIdentity: null,
       awaitingVerificationId: null,
       awaitingVerificationKind: null,
+      awaitingMagicLink: false,
+      backendReady: !isSupabaseConfigured,
 
       markIntroSeen: () => set({ hasSeenIntro: true }),
 
@@ -121,16 +274,51 @@ export const useAppStore = create<AppState>()(
           }
         }),
 
-      cancelPendingFlow: () => set({ pendingFlow: null }),
+      cancelPendingFlow: () => set({ pendingFlow: null, pendingIdentity: null }),
 
-      finalizePendingFlow: (identity) => {
+      finalizePendingFlow: async (identity) => {
         const state = get()
         const flow = state.pendingFlow
         if (!flow) return
 
         const anonymous = identity.email === null
-        let userId: string | null = null
 
+        if (isSupabaseConfigured) {
+          if (anonymous) {
+            // Only nominations support "submit without email" — votes always
+            // require a verified email (docs/BUILD_PLAN.md anti-gaming), and
+            // the UI never offers this button on the vote flow.
+            if (flow.type !== 'nomination') return
+            const draft = flow.draft
+            const councilArea = await resolveCouncilArea(draft.pin)
+            const id = await db.insertNomination({
+              userId: null,
+              exact: draft.pin,
+              public: snapToPublicGrid(draft.pin),
+              councilArea,
+              answers: draft.answers as NominationAnswers,
+              whyHere: draft.whyHere,
+              payBand: draft.payBand ?? 'free_only',
+              criteriaScore: scoreNomination(draft.answers as NominationAnswers).score,
+              criteriaFlags: scoreNomination(draft.answers as NominationAnswers).flags,
+              ownershipHint:
+                draft.answers.ownerType === 'i_own_it'
+                  ? 'Nominator says they own this stop'
+                  : 'No ownership hint yet (site finder check runs in Milestone 2)',
+              landowner: draft.landowner,
+            })
+            const nomination = nominationFromDraft(id, null, draft, false, councilArea)
+            set({ nominations: [...get().nominations, nomination], pendingFlow: null })
+          } else {
+            // Nothing is written yet — see pendingIdentity's doc comment.
+            await db.sendMagicLink(identity.email!)
+            set({ pendingIdentity: identity, awaitingMagicLink: true })
+          }
+          return
+        }
+
+        // ── Local-only mode (unchanged from Milestone 1) ──────────────────
+        let userId: string | null = null
         if (!anonymous) {
           const existing = state.currentUser
           const id = existing?.id ?? `user-${crypto.randomUUID()}`
@@ -147,30 +335,13 @@ export const useAppStore = create<AppState>()(
         }
 
         if (flow.type === 'nomination') {
-          const d = flow.draft
-          const answers = d.answers as NominationAnswers
-          const exact = d.pin
-          const nomination: Nomination = {
-            id: `nom-${crypto.randomUUID()}`,
+          const nomination = nominationFromDraft(
+            `nom-${crypto.randomUUID()}`,
             userId,
-            exact,
-            public: snapToPublicGrid(exact),
-            councilArea: guessCouncilArea(exact),
-            answers,
-            whyHere: d.whyHere,
-            payBand: d.payBand ?? 'free_only',
-            criteria: scoreNomination(answers),
-            ownershipHint:
-              answers.ownerType === 'i_own_it'
-                ? 'Nominator says they own this stop'
-                : 'No ownership hint yet (site finder check runs in Milestone 2)',
-            landowner: d.landowner,
-            status: 'submitted',
-            verified: anonymous ? false : false,
-            source: 'user',
-            createdAt: new Date().toISOString(),
-          }
-
+            flow.draft,
+            false,
+            guessCouncilArea(flow.draft.pin),
+          )
           set((s) => ({ nominations: [...s.nominations, nomination] }))
 
           if (anonymous) {
@@ -239,7 +410,61 @@ export const useAppStore = create<AppState>()(
 
         set({ pendingFlow: null, awaitingVerificationId: null, awaitingVerificationKind: null })
       },
+
+      initRealBackend: async () => {
+        if (!isSupabaseConfigured) return
+
+        const [nominations, votes] = await Promise.all([
+          db.fetchPublicNominations(),
+          db.fetchPublicVotes(),
+        ])
+        set({ nominations, votes, backendReady: true })
+
+        const finishSignIn = async (user: { id: string; email?: string }) => {
+          if (!user.email) return
+          const hadPending = get().pendingFlow && get().pendingIdentity
+          if (hadPending) {
+            await completePendingSignIn(get, set, user.id, user.email)
+          } else {
+            set({ currentUser: { id: user.id, email: user.email, verified: true, consents: [] } })
+          }
+          const [myNominations, myVotes] = await Promise.all([
+            db.fetchMyNominations(user.id),
+            db.fetchMyVotes(user.id),
+          ])
+          set((s) => ({
+            nominations: mergeById(s.nominations, myNominations),
+            votes: mergeById(s.votes, myVotes),
+          }))
+        }
+
+        const existingUser = await db.getCurrentSessionUser()
+        if (existingUser) await finishSignIn(existingUser)
+
+        db.onAuthStateChange((user) => {
+          if (user) void finishSignIn(user)
+        })
+      },
     }),
-    { name: 'stopspotter-prototype' },
+    {
+      name: 'stopspotter-prototype',
+      // Seed data is local-only-mode flavour; never persist it, and never
+      // persist the real backend's fetched feed either (initRealBackend
+      // re-fetches fresh on every load) — only the genuinely durable bits.
+      partialize: (state) => ({
+        hasSeenIntro: state.hasSeenIntro,
+        currentUser: state.currentUser,
+        pendingFlow: state.pendingFlow,
+        pendingIdentity: state.pendingIdentity,
+        awaitingMagicLink: state.awaitingMagicLink,
+        ...(isSupabaseConfigured ? {} : { nominations: state.nominations, votes: state.votes }),
+      }),
+    },
   ),
 )
+
+/** Replaces entries that share an id, appends the rest — used to fold "my full data" over the public (column-limited) rows already in state. */
+function mergeById<T extends { id: string }>(existing: T[], updates: T[]): T[] {
+  const updateIds = new Set(updates.map((u) => u.id))
+  return [...existing.filter((e) => !updateIds.has(e.id)), ...updates]
+}

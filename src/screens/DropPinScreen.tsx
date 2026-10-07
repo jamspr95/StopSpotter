@@ -5,7 +5,9 @@ import { useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { MAP_CENTRE } from '../data/seed'
+import * as db from '../lib/db'
 import { findDuplicateWithin200m } from '../lib/geo'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 import type { LatLng } from '../types'
 
@@ -25,6 +27,7 @@ export function DropPinScreen() {
   const [satellite, setSatellite] = useState(true)
   const [centre, setCentre] = useState<LatLng>(MAP_CENTRE)
   const [locating, setLocating] = useState(false)
+  const [checking, setChecking] = useState(false)
   const nominations = useAppStore((s) => s.nominations)
   const beginNomination = useAppStore((s) => s.beginNomination)
   const beginVote = useAppStore((s) => s.beginVote)
@@ -44,12 +47,30 @@ export function DropPinScreen() {
     )
   }
 
-  function handleConfirm() {
-    const duplicate = findDuplicateWithin200m(centre, nominations)
-    if (duplicate) {
-      beginVote(duplicate.id)
-      navigate('/vote', { state: { duplicateNotice: true } })
-      return
+  async function handleConfirm() {
+    // exact_location isn't readable client-side in real-backend mode (see
+    // supabase/migrations/0001_init.sql) — the public nominations list this
+    // screen's local-only check runs against doesn't have it, so this has
+    // to be a server-side RPC instead once Supabase is configured.
+    if (isSupabaseConfigured) {
+      setChecking(true)
+      try {
+        const nearby = await db.findNearbyNomination(centre)
+        if (nearby) {
+          beginVote(nearby.id)
+          navigate('/vote', { state: { duplicateNotice: true } })
+          return
+        }
+      } finally {
+        setChecking(false)
+      }
+    } else {
+      const duplicate = findDuplicateWithin200m(centre, nominations)
+      if (duplicate) {
+        beginVote(duplicate.id)
+        navigate('/vote', { state: { duplicateNotice: true } })
+        return
+      }
     }
     beginNomination(centre)
     navigate('/spot/form')
@@ -108,9 +129,10 @@ export function DropPinScreen() {
         <button
           type="button"
           onClick={handleConfirm}
-          className="w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+          disabled={checking}
+          className="w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white disabled:opacity-60 active:bg-brand-700"
         >
-          Confirm location
+          {checking ? 'Checking…' : 'Confirm location'}
         </button>
       </div>
     </div>

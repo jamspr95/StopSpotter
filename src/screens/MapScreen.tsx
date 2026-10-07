@@ -3,6 +3,7 @@ import { MapContainer, Marker, Popup } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { MAP_CENTRE, SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED } from '../data/seed'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 
 export function MapScreen() {
@@ -10,14 +11,19 @@ export function MapScreen() {
   const nominations = useAppStore((s) => s.nominations)
   const hasSeenIntro = useAppStore((s) => s.hasSeenIntro)
   const markIntroSeen = useAppStore((s) => s.markIntroSeen)
+  const backendReady = useAppStore((s) => s.backendReady)
   const [satellite, setSatellite] = useState(true)
 
-  const totalSpotted = useMemo(
+  const totalSpotted = useMemo(() => {
+    // Real-backend mode: nominations.length is already the genuine DB count
+    // (no seed data is loaded — see useAppStore's initial state). The demo
+    // baseline below is local-only-mode flavour and would wrongly pad a
+    // real count.
+    if (isSupabaseConfigured) return nominations.length
     // SEED_TOTAL_SPOTTED already accounts for the demo markers in seedNominations,
     // so only nominations added this session on top of that should add to it.
-    () => SEED_TOTAL_SPOTTED + Math.max(0, nominations.length - SEED_NOMINATION_COUNT),
-    [nominations.length],
-  )
+    return SEED_TOTAL_SPOTTED + Math.max(0, nominations.length - SEED_NOMINATION_COUNT)
+  }, [nominations.length])
 
   return (
     <div className="relative flex h-dvh flex-col">
@@ -65,7 +71,7 @@ export function MapScreen() {
         </div>
 
         <div className="absolute right-3 top-3 z-10 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm">
-          {totalSpotted} stops spotted
+          {backendReady ? `${totalSpotted} stops spotted` : 'Loading…'}
         </div>
 
         <button
