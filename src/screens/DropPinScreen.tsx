@@ -76,7 +76,9 @@ export function DropPinScreen() {
           ref={mapRef}
           center={MAP_CENTRE}
           zoom={14}
-          className="h-full w-full"
+          // See MapScreen: z-0 contains Leaflet's internal panes/controls so the
+          // crosshair and overlay buttons below reliably paint above the map.
+          className="z-0 h-full w-full"
           zoomControl={false}
         >
           <MapTiles satellite={satellite} />

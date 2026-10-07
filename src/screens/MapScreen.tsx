@@ -33,7 +33,10 @@ export function MapScreen() {
         <MapContainer
           center={MAP_CENTRE}
           zoom={12}
-          className="h-full w-full"
+          // z-0 contains Leaflet's internal panes/controls (they go up to z-index:1000)
+          // in their own stacking context, so the overlay buttons below — on z-10 —
+          // reliably paint above the whole map instead of being outranked by it.
+          className="z-0 h-full w-full"
           zoomControl={false}
         >
           <MapTiles satellite={satellite} />
@@ -72,6 +75,23 @@ export function MapScreen() {
         >
           Spot a site
         </button>
+
+        {/* AireStop watermark, sat just above the Leaflet/Esri attribution strip.
+            Same source SVG as the app's own LogoWordmark component; forced white
+            with a filter since the source is navy-on-transparent for light surfaces —
+            the same "invert via a white tint" treatment that component reserves for
+            dark surfaces. Width is fixed from the component's documented 155:25
+            aspect ratio rather than left to load-time intrinsic sizing, so layout
+            doesn't shift/collapse if the external SVG is slow or fails to load.
+            Sized to clear the centred "Spot a site" button on a narrow phone
+            screen — a wider logo (e.g. the +30% of LogoWordmark's 22px default
+            that was tried first) overlapped it; this is the largest size that
+            still fits the gap to the button's right. */}
+        <img
+          src="https://airestop.co.uk/logo.svg"
+          alt="AireStop"
+          className="absolute bottom-7 right-2 z-10 h-[18px] w-[112px] brightness-0 invert"
+        />
 
         {!hasSeenIntro && (
           <div className="absolute inset-0 z-30 flex items-end bg-slate-900/40 p-4">
