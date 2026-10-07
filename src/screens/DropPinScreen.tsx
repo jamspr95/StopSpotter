@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { MapContainer, useMapEvents } from 'react-leaflet'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { MAP_CENTRE } from '../data/seed'
@@ -23,9 +23,17 @@ function CenterTracker({ onMove }: { onMove: (centre: LatLng) => void }) {
 
 export function DropPinScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // MapScreen passes its current viewport (centre/zoom) when sending someone
+  // here via "Spot a stop", so the pin starts over whatever they were
+  // actually looking at rather than jumping back to MAP_CENTRE — falls back
+  // to that default when arriving some other way (e.g. a direct /spot link).
+  const incomingView = location.state as { centre?: LatLng; zoom?: number } | null
+  const initialCentre = incomingView?.centre ?? MAP_CENTRE
+  const initialZoom = incomingView?.zoom ?? 14
   const mapRef = useRef<LeafletMap | null>(null)
   const [satellite, setSatellite] = useState(true)
-  const [centre, setCentre] = useState<LatLng>(MAP_CENTRE)
+  const [centre, setCentre] = useState<LatLng>(initialCentre)
   const [locating, setLocating] = useState(false)
   const [checking, setChecking] = useState(false)
   const nominations = useAppStore((s) => s.nominations)
@@ -92,15 +100,16 @@ export function DropPinScreen() {
           className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
         />
         <p className="mt-2 text-xs text-slate-500">
-          Vacant land, not car parks where possible, and at least 20m from homes.
+          Ideal stops are unused, flat land close to amenities and services — think water,
+          drainage, a pub or shop within easy reach.
         </p>
       </div>
 
       <div className="relative flex-1">
         <MapContainer
           ref={mapRef}
-          center={MAP_CENTRE}
-          zoom={14}
+          center={initialCentre}
+          zoom={initialZoom}
           // See MapScreen: z-0 contains Leaflet's internal panes/controls so the
           // crosshair and overlay buttons below reliably paint above the map.
           className="z-0 h-full w-full"

@@ -16,12 +16,12 @@ export const nominationQuestions: QuestionDef[] = [
   {
     id: 'placeType',
     prompt: 'What kind of place is it?',
+    hint: 'Ideal stops are unused, flat land close to amenities and services — like water, drainage, a pub or shop nearby.',
     type: 'single',
     options: [
       { value: 'unused_land', label: 'Unused land' },
       { value: 'grass_field', label: 'Grass area or field' },
       { value: 'lay_by', label: 'Lay-by' },
-      { value: 'car_park', label: 'Car park' },
       { value: 'other', label: 'Other' },
     ],
   },
@@ -41,9 +41,9 @@ export const nominationQuestions: QuestionDef[] = [
   {
     id: 'nearestHouse',
     prompt: 'How far is the nearest house?',
+    hint: "Just your best guess — we'll check exact distances later if needed.",
     type: 'single',
     options: [
-      { value: 'under_20m', label: 'Under 20m' },
       { value: '20_50m', label: '20–50m' },
       { value: 'over_50m', label: 'Over 50m' },
       { value: 'not_sure', label: 'Not sure' },

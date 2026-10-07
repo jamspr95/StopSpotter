@@ -1,10 +1,26 @@
-import { useMemo, useState } from 'react'
-import { MapContainer, Marker, Popup } from 'react-leaflet'
+import { useMemo, useRef, useState } from 'react'
+import { MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { MAP_CENTRE, SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED } from '../data/seed'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
+import type { LatLng } from '../types'
+
+/**
+ * Tracks the map's current viewport in a ref (not state — nobody needs a
+ * re-render on every pan) so "Spot a stop" can hand DropPinScreen the spot
+ * someone was actually looking at, instead of always reopening at MAP_CENTRE.
+ */
+function ViewportTracker({ onMove }: { onMove: (centre: LatLng, zoom: number) => void }) {
+  useMapEvents({
+    moveend: (e) => {
+      const c = e.target.getCenter()
+      onMove({ lat: c.lat, lng: c.lng }, e.target.getZoom())
+    },
+  })
+  return null
+}
 
 export function MapScreen() {
   const navigate = useNavigate()
@@ -14,6 +30,7 @@ export function MapScreen() {
   const backendReady = useAppStore((s) => s.backendReady)
   const [satellite, setSatellite] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const viewRef = useRef<{ centre: LatLng; zoom: number }>({ centre: MAP_CENTRE, zoom: 12 })
 
   const totalSpotted = useMemo(() => {
     // Real-backend mode: nominations.length is already the genuine DB count
@@ -38,6 +55,7 @@ export function MapScreen() {
         zoomControl={false}
       >
         <MapTiles satellite={satellite} />
+        <ViewportTracker onMove={(centre, zoom) => { viewRef.current = { centre, zoom } }} />
         {nominations.map((n) => (
           <Marker key={n.id} position={n.public}>
             <Popup>
@@ -115,7 +133,7 @@ export function MapScreen() {
 
       <button
         type="button"
-        onClick={() => navigate('/spot')}
+        onClick={() => navigate('/spot', { state: viewRef.current })}
         className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-full bg-brand-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg active:bg-brand-700"
       >
         Spot a stop
