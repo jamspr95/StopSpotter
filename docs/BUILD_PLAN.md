@@ -61,7 +61,7 @@ features) are calculated from these tables rather than stored separately.
 | 5 | Sign-up | Verify the person, record consent | Email, optional first name, separate unticked opt-ins, privacy notice link, "Submit without email" link | Send my link |
 | 6 | Done and share | Reward and spread | "Your spot is in", prefilled Facebook share, invite to vote nearby, support prompt | Share |
 | 7 | My spots | Close the loop | Nominations/votes with status (Submitted, Under review, Shortlisted, Live, Not suitable), synced from the sales pipeline | View site |
-| 8 | Support | Convert to backing | What AireStop is doing, how support helps, links to supporter tier/crowdfunder | Back AireStop |
+| 8 | Support | Pre-crowdfunder: ask for more stop suggestions. Post-launch: convert to backing | What AireStop is doing; primary CTA is "Spot a site" until the crowdfunder is live, then supporter tier/crowdfunder links take over; a "Coming soon" note covers the gap; back-to-map button | Spot a site (Back AireStop once live) |
 
 ### Interaction rules
 - Duplicate check at pin drop: an existing nomination within 200m is offered as a vote first.

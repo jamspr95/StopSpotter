@@ -171,6 +171,7 @@ target sites, so every lead has a single record whichever tool found it:
 | Sales pipeline | **Brevo CRM (Deals module)** — reuses the existing Brevo account rather than adding a new tool. Deals carry the pipeline stages; Brevo is the system of record for status, and a webhook pushes stage changes into StopSpotter. Landowner-only deals get a non-marketing Brevo contact (separate list, excluded from all marketing automations); outreach still happens from Gmail, not Brevo email. |
 | Site finder | Works in tandem with StopSpotter on one shared target list |
 | Local voters | Not separated out — the aim is attracting visitor spend, and locals rarely use aires |
+| Support screen phasing | At launch, no crowdfunder exists yet, so the Support screen's primary ask is "Spot a site", not backing AireStop. Supporter tier/crowdfunder links come back once the crowdfunder launches — the screen keeps a "Coming soon" note in the meantime rather than a dead CTA. |
 
 ## Open questions
 
