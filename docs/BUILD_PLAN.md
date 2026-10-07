@@ -270,18 +270,18 @@ rationale. Engineering implications:
 
 | Task | Status |
 |---|---|
-| Password-protected admin view (desktop-first) | ⬜ |
-| Stop list with filters (council area, status, score, flags, vote count) | ⬜ |
-| Exact-location admin map view (satellite, landowner details inline) | ⬜ |
-| Moderation queue (flagged free text + pins + reports) | ⬜ |
-| Confirm Brevo plan includes the Deals (CRM) module; set up pipeline with public-safe + private stages | ⬜ |
-| Auto-create a Brevo deal (linked to the nominator's contact) when a nomination passes initial moderation | ⬜ |
-| Non-marketing Brevo contact path for landowner-only deals (separate list, no marketing consent, excluded from automations) | ⬜ |
-| Supabase Edge Function: receive Brevo deal-stage webhook, map to public status enum, write `nominations.status` + `status_history` | ⬜ |
-| Trigger the applicant status email only on public-safe stage changes | ⬜ |
-| Brevo sync for opted-in supporters, consent-flag aware | ⬜ |
-| Demand report generator (PDF + CSV), per stop or per council area | ⬜ |
-| Site finder integration: shared targets table / sync job, "Suggested by AireStop" markers, 200m merge matching, combined priority score | ⬜ |
+| Password-protected admin view (desktop-first) | ✅ Email+password sign-in via Supabase Auth (`/admin/login`), gated by a server-side `admins` table rather than a client-side password — see `supabase/migrations/0002_admin.sql` and `docs/SETUP.md` §9. Verified: every admin RPC denies a non-admin authenticated user and `anon` outright (real role-switched Postgres tests), and the `/admin/*` route guard redirects a signed-out visitor to login even on a direct deep link |
+| Stop list with filters (council area, status, score, flags, vote count) | ✅ `AdminStopsScreen` — filters/sorts client-side over `admin_list_nominations()`, which returns every column the public view withholds (exact location, owner_type, criteria detail) plus a per-nomination vote count |
+| Exact-location admin map view (satellite, landowner details inline) | ✅ `AdminStopDetailScreen` — reuses the existing `MapTiles`/`SatelliteToggle` components centred on `exact_location`; landowner leads shown inline via `admin_list_landowner_leads()` |
+| Moderation queue (flagged free text + pins + reports) | 🔄 `AdminModerationScreen` surfaces user-submitted `moderation_reports` with resolve/view actions — verified against real Postgres. The automatic AI moderation check this line also describes is **still not implemented** (no content-moderation API wired up; genuinely open, same as noted in Milestone 2) — there is no automatic flagging of free text or pins yet, only user reports |
+| Confirm Brevo plan includes the Deals (CRM) module; set up pipeline with public-safe + private stages | ⬜ External step — see `docs/SETUP.md` §10. Can't be done from a coding session (needs the Brevo account) |
+| Auto-create a Brevo deal (linked to the nominator's contact) when a nomination passes initial moderation | ⬜ **Not built.** Needs a real Brevo API key to get the request shape right and verify it actually works — guessing it blind and shipping unverified API-integration code felt like a worse outcome than leaving it open. See `docs/SETUP.md` §10 |
+| Non-marketing Brevo contact path for landowner-only deals (separate list, no marketing consent, excluded from automations) | ⬜ Same as above — depends on the deal-creation integration existing first |
+| Supabase Edge Function: receive Brevo deal-stage webhook, map to public status enum, write `nominations.status` + `status_history` | 🔄 `supabase/functions/brevo-webhook/index.ts` is written and reads correctly, but genuinely **unverified against a live Brevo account** — no Deno/Supabase CLI + Docker available in this environment to run it locally, and no Brevo account to send a real webhook from. The payload shape it expects is a contract this function defines itself (Brevo's workflow editor builds a custom JSON body), not a guess at Brevo's native format, which is why this was worth writing blind where the deal-creation direction (above) wasn't |
+| Trigger the applicant status email only on public-safe stage changes | ⬜ Depends on the webhook path above being live and on `status_history`/email-sending being wired together — not started |
+| Brevo sync for opted-in supporters, consent-flag aware | ⬜ Not started — external dependency, same as the deal-creation item |
+| Demand report generator (PDF + CSV), per stop or per council area | ✅ `AdminReportsScreen` — CSV via a small hand-written serialiser (`src/lib/csv.ts`), PDF via `jsPDF`, both built from `admin_list_nominations()`, filterable by council area. jsPDF is dynamically imported inside the download handler — a static top-level import was tried first and inflated the *public* app's main bundle by ~650KB gzipped for a feature only the admin dashboard uses; fixed before this shipped |
+| Site finder integration: shared targets table / sync job, "Suggested by AireStop" markers, 200m merge matching, combined priority score | ⬜ **Blocked, not just unstarted** — this needs to know the site finder tool's actual data model/API surface (shared DB? export? its own API?), which isn't available in this environment. Added as an open question in `docs/PROJECT_PLAN.md` rather than guessed at |
 
 ### Milestone 4 — Soft launch
 

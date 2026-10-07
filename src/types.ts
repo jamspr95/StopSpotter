@@ -86,3 +86,57 @@ export interface CurrentUser {
   verified: boolean
   consents: ConsentRecord[]
 }
+
+// ── Admin (Milestone 3) ───────────────────────────────────────────────────
+// Full-detail shapes the admin dashboard reads via the admin_* RPCs in
+// supabase/migrations/0002_admin.sql — includes columns (exact location,
+// owner_type, criteria_score/flags, user_id) the public app never sees.
+
+export interface AdminNomination {
+  id: string
+  userId: string | null
+  exact: LatLng
+  public: LatLng
+  councilArea: string | null
+  answers: NominationAnswers
+  whyHere?: string
+  payBand: PayBand
+  criteria: CriteriaResult
+  ownershipHint: string
+  status: NominationStatus
+  verified: boolean
+  source: 'user' | 'site_finder' | 'both'
+  createdAt: string
+  voteCount: number
+}
+
+export interface AdminLandownerLead {
+  id: string
+  ownerNameOrOrg?: string
+  howKnown?: HowKnown
+  contact?: string
+  happyToBeContacted?: boolean
+  createdAt: string
+}
+
+export interface AdminStatusHistoryEntry {
+  id: string
+  fromStatus: NominationStatus | null
+  toStatus: NominationStatus
+  changedBy: string | null
+  note: string | null
+  createdAt: string
+}
+
+export interface AdminModerationReport {
+  id: string
+  nominationId: string
+  reporterId: string | null
+  reason: string
+  resolved: boolean
+  createdAt: string
+  nominationPlaceType: string
+  nominationCouncilArea: string | null
+  nominationWhyHere: string | null
+  nominationStatus: NominationStatus
+}

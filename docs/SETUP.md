@@ -189,3 +189,81 @@ After steps 1–5:
 If something doesn't work, the browser console and the Supabase
 dashboard's **Logs** section (both API logs and Auth logs) are the first
 places to look — RLS denials and auth errors both show up there.
+
+---
+
+## 9. Admin dashboard access (Milestone 3)
+
+The admin dashboard at `/admin` needs its own schema on top of the base
+one — run [`supabase/migrations/0002_admin.sql`](../supabase/migrations/0002_admin.sql)
+the same way you ran `0001_init.sql` (SQL Editor → New query → paste →
+run). It's been verified the same way as the base schema: against a real
+local Postgres+PostGIS instance, with actual role-switched calls exercising
+every admin RPC under both an admin and a non-admin signed-in user, plus
+`anon` — not just written and hoped.
+
+There's no separate "admin password" scheme — an admin account is a normal
+Supabase Auth user that signs in with email + password (rather than the
+public app's magic link) and has been added to a server-side `admins`
+table. Both steps are manual and one-time:
+
+1. **Dashboard → Authentication → Users → Add user.** Set an email and
+   password, and tick "Auto Confirm User" (otherwise it'll wait on a
+   confirmation email).
+2. **Dashboard → SQL Editor**, run:
+   ```sql
+   insert into public.admins (user_id)
+   values ('paste-the-new-user-id-here');
+   ```
+   (The user's id is shown in the Users list, or
+   `select id from auth.users where email = '...';`.)
+3. Sign in at `/admin` with that email and password.
+
+Add more admins the same way. There's deliberately no self-service way to
+grant admin — `admins` has no policies for `anon`/`authenticated` at all,
+so it can only be written from the dashboard (service role).
+
+## 10. Brevo CRM pipeline and status-sync webhook (optional, Milestone 3)
+
+This is the most externally-dependent piece of Milestone 3 — most of it
+can't be verified from a coding session at all, and one planned half
+(auto-creating a Brevo deal when a nomination passes moderation) isn't
+built yet, because it would mean guessing Brevo's REST API request shape
+with no account to test it against. What follows is the half that **is**
+built: a webhook receiver that updates a nomination's status when its
+linked Brevo deal changes pipeline stage.
+
+1. Confirm the Brevo plan includes the **Deals (CRM)** module, and set up
+   a pipeline with stages matching (or mappable to) StopSpotter's status
+   enum: `submitted`, `under_review`, `shortlisted`, `live`, `not_suitable`.
+2. Add a custom **text field** on the Deal object called `nomination_id`
+   — this is what links a Brevo deal back to a StopSpotter row. (Until the
+   deal-auto-create half is built, this has to be filled in by hand per
+   deal for now.)
+3. Deploy the webhook function: `supabase functions deploy brevo-webhook`
+   (needs the Supabase CLI, `supabase link`ed to this project first).
+4. **Dashboard → Edge Functions → brevo-webhook → Settings**, add a secret
+   `BREVO_WEBHOOK_SECRET` (any random string) — the function checks this
+   against an `x-webhook-secret` header on every request, so skip this
+   step only if you're happy for the endpoint to be unauthenticated.
+5. In Brevo: **Automations → New workflow**, trigger **"Deal stage is
+   updated"**, action **Webhook**. Point it at
+   `https://xxxxx.supabase.co/functions/v1/brevo-webhook`, set the
+   `x-webhook-secret` header to match step 4, and build the JSON body as:
+   ```json
+   { "nomination_id": "{{ deal.nomination_id }}", "stage_name": "{{ deal.stage }}" }
+   ```
+   (The exact placeholder syntax for deal fields is whatever Brevo's
+   workflow editor uses at the time — this wasn't something that could be
+   confirmed without a live account.)
+6. Edit `STAGE_TO_STATUS` in
+   [`supabase/functions/brevo-webhook/index.ts`](../supabase/functions/brevo-webhook/index.ts)
+   so its keys exactly match your pipeline's real stage names, then
+   redeploy.
+
+**Not built, and why:** auto-creating the Brevo deal itself (so step 2
+doesn't have to be manual) needs a real API key to get Brevo's request
+shape right and verify it actually works — that's an external-account
+dependency this environment can't satisfy, not a decision to skip it.
+Same for syncing opted-in supporters to Brevo's marketing lists. Both stay
+on the Milestone 3 checklist in `docs/BUILD_PLAN.md` as open.

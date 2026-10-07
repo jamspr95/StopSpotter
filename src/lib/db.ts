@@ -1,7 +1,12 @@
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import type {
+  AdminLandownerLead,
+  AdminModerationReport,
+  AdminNomination,
+  AdminStatusHistoryEntry,
   ConsentRecord,
+  HowKnown,
   LatLng,
   LandownerFollowUp,
   Nomination,
@@ -397,5 +402,189 @@ export async function insertModerationReport(nominationId: string, reason: strin
   const { error } = await client()
     .from('moderation_reports')
     .insert({ nomination_id: nominationId, reason })
+  if (error) throw error
+}
+
+// ── Admin (Milestone 3) ──────────────────────────────────────────────────
+// Everything below only works for a signed-in user present in the
+// `admins` table (supabase/migrations/0002_admin.sql) — every RPC checks
+// that server-side and raises 'not authorized' otherwise. There's no
+// separate "admin password" scheme: an admin account is a normal Supabase
+// Auth user (created via the dashboard, see docs/SETUP.md) that signs in
+// with email + password rather than the public app's magic link, then
+// gets added to `admins` once, manually.
+
+export async function adminSignIn(email: string, password: string): Promise<void> {
+  const { error } = await client().auth.signInWithPassword({ email, password })
+  if (error) throw error
+}
+
+export async function adminSignOut(): Promise<void> {
+  const { error } = await client().auth.signOut()
+  if (error) throw error
+}
+
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const { data, error } = await client().rpc('current_user_is_admin')
+  if (error) throw error
+  return Boolean(data)
+}
+
+interface AdminNominationRow {
+  id: string
+  user_id: string | null
+  exact_lat: number
+  exact_lng: number
+  public_lat: number
+  public_lng: number
+  council_area: string | null
+  place_type: NominationAnswers['placeType']
+  owner_type: NominationAnswers['ownerType']
+  nearest_house: NominationAnswers['nearestHouse']
+  slope: NominationAnswers['slope']
+  room_for_five: NominationAnswers['roomForFive']
+  nearby: NominationAnswers['nearby']
+  water: NominationAnswers['water']
+  why_here: string | null
+  pay_band: PayBand
+  criteria_score: number
+  criteria_flags: string[]
+  ownership_hint: string | null
+  status: NominationStatus
+  verified: boolean
+  source: 'user' | 'site_finder' | 'both'
+  created_at: string
+  vote_count: number
+}
+
+export async function adminListNominations(): Promise<AdminNomination[]> {
+  const { data, error } = await client().rpc('admin_list_nominations')
+  if (error) throw error
+  return (data as AdminNominationRow[]).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    exact: { lat: row.exact_lat, lng: row.exact_lng },
+    public: { lat: row.public_lat, lng: row.public_lng },
+    councilArea: row.council_area,
+    answers: {
+      placeType: row.place_type,
+      ownerType: row.owner_type,
+      nearestHouse: row.nearest_house,
+      slope: row.slope,
+      roomForFive: row.room_for_five,
+      nearby: row.nearby,
+      water: row.water,
+    },
+    whyHere: row.why_here ?? undefined,
+    payBand: row.pay_band,
+    criteria: { score: row.criteria_score, flags: row.criteria_flags },
+    ownershipHint: row.ownership_hint ?? '',
+    status: row.status,
+    verified: row.verified,
+    source: row.source,
+    createdAt: row.created_at,
+    voteCount: row.vote_count,
+  }))
+}
+
+export async function adminUpdateNominationStatus(
+  nominationId: string,
+  newStatus: NominationStatus,
+  note?: string,
+): Promise<void> {
+  const { error } = await client().rpc('admin_update_nomination_status', {
+    p_nomination_id: nominationId,
+    p_new_status: newStatus,
+    p_note: note ?? null,
+  })
+  if (error) throw error
+}
+
+interface AdminStatusHistoryRow {
+  id: string
+  from_status: NominationStatus | null
+  to_status: NominationStatus
+  changed_by: string | null
+  note: string | null
+  created_at: string
+}
+
+export async function adminListStatusHistory(nominationId: string): Promise<AdminStatusHistoryEntry[]> {
+  const { data, error } = await client().rpc('admin_list_status_history', {
+    p_nomination_id: nominationId,
+  })
+  if (error) throw error
+  return (data as AdminStatusHistoryRow[]).map((row) => ({
+    id: row.id,
+    fromStatus: row.from_status,
+    toStatus: row.to_status,
+    changedBy: row.changed_by,
+    note: row.note,
+    createdAt: row.created_at,
+  }))
+}
+
+interface AdminLandownerLeadRow {
+  id: string
+  owner_name_or_org: string | null
+  how_known: HowKnown | null
+  contact: string | null
+  happy_to_be_contacted: boolean | null
+  created_at: string
+}
+
+export async function adminListLandownerLeads(nominationId: string): Promise<AdminLandownerLead[]> {
+  const { data, error } = await client().rpc('admin_list_landowner_leads', {
+    p_nomination_id: nominationId,
+  })
+  if (error) throw error
+  return (data as AdminLandownerLeadRow[]).map((row) => ({
+    id: row.id,
+    ownerNameOrOrg: row.owner_name_or_org ?? undefined,
+    howKnown: row.how_known ?? undefined,
+    contact: row.contact ?? undefined,
+    happyToBeContacted: row.happy_to_be_contacted ?? undefined,
+    createdAt: row.created_at,
+  }))
+}
+
+interface AdminModerationReportRow {
+  id: string
+  nomination_id: string
+  reporter_id: string | null
+  reason: string
+  resolved: boolean
+  created_at: string
+  nomination_place_type: string
+  nomination_council_area: string | null
+  nomination_why_here: string | null
+  nomination_status: NominationStatus
+}
+
+export async function adminListModerationReports(
+  includeResolved = false,
+): Promise<AdminModerationReport[]> {
+  const { data, error } = await client().rpc('admin_list_moderation_reports', {
+    p_include_resolved: includeResolved,
+  })
+  if (error) throw error
+  return (data as AdminModerationReportRow[]).map((row) => ({
+    id: row.id,
+    nominationId: row.nomination_id,
+    reporterId: row.reporter_id,
+    reason: row.reason,
+    resolved: row.resolved,
+    createdAt: row.created_at,
+    nominationPlaceType: row.nomination_place_type,
+    nominationCouncilArea: row.nomination_council_area,
+    nominationWhyHere: row.nomination_why_here,
+    nominationStatus: row.nomination_status,
+  }))
+}
+
+export async function adminResolveModerationReport(reportId: string): Promise<void> {
+  const { error } = await client().rpc('admin_resolve_moderation_report', {
+    p_report_id: reportId,
+  })
   if (error) throw error
 }

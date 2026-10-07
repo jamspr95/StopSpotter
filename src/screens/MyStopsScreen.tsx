@@ -1,14 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
+import { STATUS_LABEL } from '../lib/labels'
 import { useAppStore } from '../store/useAppStore'
-
-const STATUS_LABEL: Record<string, string> = {
-  submitted: 'Submitted',
-  under_review: 'Under review',
-  shortlisted: 'Shortlisted',
-  live: 'Live',
-  not_suitable: 'Not suitable',
-}
 
 export function MyStopsScreen() {
   const navigate = useNavigate()
