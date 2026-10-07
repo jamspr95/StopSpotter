@@ -44,7 +44,7 @@ export function SupportScreen() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <ScreenHeader title="Support AireStop" />
+      <ScreenHeader title="Support AireStop" logo />
       <div className="flex-1 overflow-y-auto p-4">
         <p className="text-base text-slate-700">
           AireStop is on a mission to build a network of motorhome stopovers across the UK —
