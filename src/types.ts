@@ -128,6 +128,12 @@ export interface AdminStatusHistoryEntry {
   createdAt: string
 }
 
+export interface AdminAnalyticsSummaryRow {
+  eventType: string
+  campaign: string | null
+  eventCount: number
+}
+
 export interface AdminModerationReport {
   id: string
   nominationId: string

@@ -1,17 +1,35 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as db from '../../lib/db'
 import { downloadCsv } from '../../lib/csv'
 import { STATUS_LABEL } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
+import type { AdminAnalyticsSummaryRow } from '../../types'
+
+const EVENT_LABEL: Record<string, string> = {
+  pageview: 'Pageviews',
+  share_click: 'Share clicks',
+  nomination_submit: 'Nominations',
+  vote_submit: 'Votes',
+}
 
 export function AdminReportsScreen() {
   const nominations = useAdminStore((s) => s.nominations)
   const loading = useAdminStore((s) => s.nominationsLoading)
   const loadNominations = useAdminStore((s) => s.loadNominations)
   const [councilFilter, setCouncilFilter] = useState('all')
+  const [analytics, setAnalytics] = useState<AdminAnalyticsSummaryRow[]>([])
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
 
   useEffect(() => {
     if (nominations.length === 0) void loadNominations()
   }, [nominations.length, loadNominations])
+
+  useEffect(() => {
+    void db
+      .adminAnalyticsSummary()
+      .then(setAnalytics)
+      .catch((err) => setAnalyticsError(err instanceof Error ? err.message : 'Failed to load analytics.'))
+  }, [])
 
   const councilAreas = useMemo(() => {
     const set = new Set<string>()
@@ -154,6 +172,45 @@ export function AdminReportsScreen() {
           {rows.length} stops, {rows.reduce((sum, n) => sum + n.voteCount, 0)} total votes,{' '}
           {willingToPay} with at least one paid-band vote.
         </p>
+      )}
+
+      <h2 className="mt-8 font-display text-lg font-semibold text-slate-900">Funnel &amp; campaigns</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Cookieless event counts — no third-party analytics, just pageviews/shares/conversions
+        logged to Supabase and broken down by the <code>utm_campaign</code>/<code>utm_source</code>{' '}
+        a visitor first arrived with.
+      </p>
+
+      {analyticsError && (
+        <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{analyticsError}</p>
+      )}
+
+      {!analyticsError && (
+        <table className="mt-4 w-full overflow-hidden rounded-xl bg-white text-sm shadow-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+              <th className="p-3">Event</th>
+              <th className="p-3">Campaign</th>
+              <th className="p-3">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.map((row) => (
+              <tr key={`${row.eventType}-${row.campaign ?? 'none'}`} className="border-b border-slate-100 last:border-0">
+                <td className="p-3 text-slate-800">{EVENT_LABEL[row.eventType] ?? row.eventType}</td>
+                <td className="p-3 text-slate-600">{row.campaign ?? '— (no campaign tag)'}</td>
+                <td className="p-3 text-slate-600">{row.eventCount}</td>
+              </tr>
+            ))}
+            {analytics.length === 0 && (
+              <tr>
+                <td colSpan={3} className="p-6 text-center text-slate-400">
+                  No events logged yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       )}
     </div>
   )

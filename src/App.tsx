@@ -1,4 +1,6 @@
-import { Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Route, Routes, useLocation } from 'react-router-dom'
+import { logEvent } from './lib/analytics'
 import { AdminLayout } from './screens/admin/AdminLayout'
 import { AdminLoginScreen } from './screens/admin/AdminLoginScreen'
 import { AdminModerationScreen } from './screens/admin/AdminModerationScreen'
@@ -15,26 +17,38 @@ import { StopCardScreen } from './screens/StopCardScreen'
 import { SupportScreen } from './screens/SupportScreen'
 import { VoteScreen } from './screens/VoteScreen'
 
+/** One cookieless pageview event per route change — see src/lib/analytics.ts. */
+function PageviewTracker() {
+  const location = useLocation()
+  useEffect(() => {
+    logEvent('pageview', location.pathname)
+  }, [location.pathname])
+  return null
+}
+
 export function App() {
   return (
-    <Routes>
-      <Route path="/" element={<MapScreen />} />
-      <Route path="/stop/:id" element={<StopCardScreen />} />
-      <Route path="/spot" element={<DropPinScreen />} />
-      <Route path="/spot/form" element={<NominationFormScreen />} />
-      <Route path="/spot/signup" element={<SignUpScreen />} />
-      <Route path="/vote" element={<VoteScreen />} />
-      <Route path="/done" element={<DoneShareScreen />} />
-      <Route path="/my-stops" element={<MyStopsScreen />} />
-      <Route path="/support" element={<SupportScreen />} />
+    <>
+      <PageviewTracker />
+      <Routes>
+        <Route path="/" element={<MapScreen />} />
+        <Route path="/stop/:id" element={<StopCardScreen />} />
+        <Route path="/spot" element={<DropPinScreen />} />
+        <Route path="/spot/form" element={<NominationFormScreen />} />
+        <Route path="/spot/signup" element={<SignUpScreen />} />
+        <Route path="/vote" element={<VoteScreen />} />
+        <Route path="/done" element={<DoneShareScreen />} />
+        <Route path="/my-stops" element={<MyStopsScreen />} />
+        <Route path="/support" element={<SupportScreen />} />
 
-      <Route path="/admin/login" element={<AdminLoginScreen />} />
-      <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<AdminStopsScreen />} />
-        <Route path="stop/:id" element={<AdminStopDetailScreen />} />
-        <Route path="moderation" element={<AdminModerationScreen />} />
-        <Route path="reports" element={<AdminReportsScreen />} />
-      </Route>
-    </Routes>
+        <Route path="/admin/login" element={<AdminLoginScreen />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminStopsScreen />} />
+          <Route path="stop/:id" element={<AdminStopDetailScreen />} />
+          <Route path="moderation" element={<AdminModerationScreen />} />
+          <Route path="reports" element={<AdminReportsScreen />} />
+        </Route>
+      </Routes>
+    </>
   )
 }

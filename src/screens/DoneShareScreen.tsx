@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
+import { logEvent, withCampaignParam } from '../lib/analytics'
 
 export function DoneShareScreen() {
   const navigate = useNavigate()
@@ -9,12 +10,24 @@ export function DoneShareScreen() {
   const [copied, setCopied] = useState(false)
 
   const isNomination = flowType === 'nomination'
-  const shareUrl = `${window.location.origin}${import.meta.env.BASE_URL}`
+  const shareUrl = withCampaignParam(
+    `${window.location.origin}${import.meta.env.BASE_URL}`,
+    'share',
+  )
   const shareText = isNomination
     ? "I just spotted a potential motorhome aire for AireStop — have a look on StopSpotter"
     : "I just backed a potential motorhome aire on StopSpotter — go vote on one near you"
 
+  // Logged once, on arrival at this screen — this is the funnel's
+  // conversion moment (docs/BUILD_PLAN.md "Monitor funnel (click →
+  // sign-up → nomination/vote)"), not something to log again on re-render.
+  useEffect(() => {
+    logEvent(isNomination ? 'nomination_submit' : 'vote_submit', location.pathname)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately once-on-arrival, not on every isNomination/pathname change
+  }, [])
+
   async function handleShare() {
+    logEvent('share_click', location.pathname)
     if (navigator.share) {
       try {
         await navigator.share({ title: 'StopSpotter', text: shareText, url: shareUrl })

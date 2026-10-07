@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './App'
+import { captureCampaignFromUrl } from './lib/analytics'
 import { useAppStore } from './store/useAppStore'
 import './lib/leafletIconFix'
 import './index.css'
@@ -10,6 +11,10 @@ import './index.css'
 // Supabase is configured; a no-op otherwise. Screens read `backendReady` /
 // the store's state rather than awaiting this directly.
 void useAppStore.getState().initRealBackend()
+
+// First-touch campaign attribution — see src/lib/analytics.ts. Read once,
+// before the router strips the query string off on the first navigation.
+captureCampaignFromUrl(window.location.search)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

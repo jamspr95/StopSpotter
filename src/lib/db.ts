@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import type {
+  AdminAnalyticsSummaryRow,
   AdminLandownerLead,
   AdminModerationReport,
   AdminNomination,
@@ -587,4 +588,20 @@ export async function adminResolveModerationReport(reportId: string): Promise<vo
     p_report_id: reportId,
   })
   if (error) throw error
+}
+
+interface AdminAnalyticsSummaryRpcRow {
+  event_type: string
+  campaign: string | null
+  event_count: number
+}
+
+export async function adminAnalyticsSummary(): Promise<AdminAnalyticsSummaryRow[]> {
+  const { data, error } = await client().rpc('admin_analytics_summary')
+  if (error) throw error
+  return (data as AdminAnalyticsSummaryRpcRow[]).map((row) => ({
+    eventType: row.event_type,
+    campaign: row.campaign,
+    eventCount: row.event_count,
+  }))
 }

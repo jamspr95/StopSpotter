@@ -264,7 +264,7 @@ rationale. Engineering implications:
 | Automatic AI moderation check (offensive content, personal details, home/garden pins) on free text + new pins | ⬜ Not implemented — needs a real AI/content-moderation call (no API wired for this yet). `moderation_reports` (user-submitted reports) is ready; the automatic check is separate and still open |
 | Share flow: prefilled Facebook share, deep link opens map at stop | ✅ Unchanged from Milestone 1 |
 | "My Stops" screen with status history | 🔄 Own nominations/votes now come from the real `get_my_nominations`/`get_my_votes` RPCs (full detail, not the column-limited public view). `status_history` table exists but nothing reads/writes it yet — that's the Milestone 3 admin pipeline's job |
-| Cookieless analytics + campaign tagging on share/post links | ⬜ Not started |
+| Cookieless analytics + campaign tagging on share/post links | ✅ Self-hosted event log (`supabase/migrations/0004_analytics.sql`, `src/lib/analytics.ts`) rather than a third-party vendor — no cookies, just a fire-and-forget insert per pageview/share-click/conversion. First-touch `utm_campaign`/`utm_source` capture on landing, carried through to every event and appended back onto outgoing share links. Admin-only aggregate RPC (`admin_analytics_summary`), shown as a breakdown in `AdminReportsScreen`. Verified against the real project (role-switched: anon can log, cannot read; non-admin authenticated is denied; admin gets the aggregate) and against a deliberately unreachable backend (confirmed the new per-route pageview logging doesn't hang or crash the app — it fails fast and silently, same fail-open philosophy as the rest of real-backend mode) |
 
 ### Milestone 3 — Admin and reporting
 
