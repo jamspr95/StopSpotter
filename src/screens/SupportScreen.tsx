@@ -1,27 +1,48 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
+import { GROWTH_OPTION_CROWDFUND, GROWTH_OPTIONS } from '../data/growthOptions'
 import { useAppStore } from '../store/useAppStore'
 
-const GROWTH_OPTIONS = ["I'd support a crowdfund", 'I hold a helpful position']
+const FOLLOW_UP_PROMPT: Record<string, { label: string; placeholder: string }> = {
+  'I hold a helpful position': {
+    label: 'Tell us about your role and how you could help.',
+    placeholder: 'For example, a councillor, a planning officer, or someone who knows a landowner.',
+  },
+  'I have an idea to help growth': {
+    label: 'Tell us more about your idea.',
+    placeholder: "What's your idea?",
+  },
+}
 
 export function SupportScreen() {
   const navigate = useNavigate()
   const beginGrowthFeedback = useAppStore((s) => s.beginGrowthFeedback)
+  const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [message, setMessage] = useState('')
 
-  // Tapping an option is itself the submit action — it carries straight into
-  // the same email-capture flow nomination/vote use (SignUpScreen), so
-  // there's someone real to follow up with rather than an anonymous row.
+  // The crowdfund option is itself the submit action — it carries straight
+  // into the email-capture flow nomination/vote use (SignUpScreen), so
+  // there's someone real to follow up with in the CRM. The other two
+  // options need a bit more detail first, so tapping them just opens their
+  // own prompt below instead of submitting right away.
   function handleOption(option: string) {
-    beginGrowthFeedback([option], message.trim() || undefined)
+    if (option === GROWTH_OPTION_CROWDFUND) {
+      beginGrowthFeedback([option], undefined)
+      navigate('/spot/signup')
+      return
+    }
+    setSelectedOption((current) => (current === option ? null : option))
+    setMessage('')
+  }
+
+  function handleSubmitFollowUp() {
+    if (!selectedOption) return
+    beginGrowthFeedback([selectedOption], message.trim() || undefined)
     navigate('/spot/signup')
   }
 
-  function handleSendMessage() {
-    beginGrowthFeedback([], message.trim() || undefined)
-    navigate('/spot/signup')
-  }
+  const followUp = selectedOption ? FOLLOW_UP_PROMPT[selectedOption] : null
 
   return (
     <div className="flex h-dvh flex-col">
@@ -61,8 +82,7 @@ export function SupportScreen() {
           <p className="mt-2 text-sm text-slate-600">
             We're exploring how to grow and develop StopSpotter faster. If any of this applies
             to you, tap it below. It'll never change a stop's votes or ranking, it's a separate
-            way to help. Got an idea to grow the network? Tell us about it in the box below.
-            We'll ask for your email so we can get back to you.
+            way to help.
           </p>
 
           <div className="mt-4 flex flex-col gap-2">
@@ -71,29 +91,41 @@ export function SupportScreen() {
                 key={option}
                 type="button"
                 onClick={() => handleOption(option)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 active:bg-slate-50"
+                className={`rounded-lg border px-3 py-2 text-left text-sm font-medium active:bg-slate-50 ${
+                  selectedOption === option
+                    ? 'border-brand-600 bg-brand-50 text-brand-800'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
               >
                 {option}
               </button>
             ))}
           </div>
 
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Anything else you'd like to tell us?"
-            rows={3}
-            className="mt-3 w-full rounded-lg border border-slate-200 p-3 text-sm"
-          />
+          {followUp && (
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-slate-700">{followUp.label}</label>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={followUp.placeholder}
+                rows={3}
+                className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm"
+              />
+              <button
+                type="button"
+                disabled={message.trim() === ''}
+                onClick={handleSubmitFollowUp}
+                className="mt-2 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Submit
+              </button>
+            </div>
+          )}
 
-          <button
-            type="button"
-            disabled={message.trim() === ''}
-            onClick={handleSendMessage}
-            className="mt-3 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Send
-          </button>
+          <p className="mt-3 text-xs text-slate-500">
+            We'll ask for your email so we can get back to you.
+          </p>
         </div>
 
         <button

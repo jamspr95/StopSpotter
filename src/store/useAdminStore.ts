@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import * as db from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
-import type { AdminModerationReport, AdminNomination, NominationStatus } from '../types'
+import type { AdminGrowthFeedback, AdminModerationReport, AdminNomination, NominationStatus } from '../types'
 
 export type AdminSessionStatus = 'checking' | 'signed_out' | 'not_admin' | 'admin'
 
@@ -12,6 +12,8 @@ interface AdminState {
   nominationsLoading: boolean
   moderationReports: AdminModerationReport[]
   moderationLoading: boolean
+  growthFeedback: AdminGrowthFeedback[]
+  growthFeedbackLoading: boolean
   error: string | null
 
   checkSession: () => Promise<void>
@@ -25,6 +27,11 @@ interface AdminState {
     note?: string,
   ) => Promise<void>
   resolveModerationReport: (reportId: string) => Promise<void>
+  loadGrowthFeedback: () => Promise<void>
+  updateGrowthFeedback: (
+    id: string,
+    patch: { actioned?: boolean; crmSynced?: boolean },
+  ) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -34,6 +41,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   nominationsLoading: false,
   moderationReports: [],
   moderationLoading: false,
+  growthFeedback: [],
+  growthFeedbackLoading: false,
   error: null,
 
   checkSession: async () => {
@@ -72,7 +81,13 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 
   signOut: async () => {
     await db.adminSignOut()
-    set({ sessionStatus: 'signed_out', adminEmail: null, nominations: [], moderationReports: [] })
+    set({
+      sessionStatus: 'signed_out',
+      adminEmail: null,
+      nominations: [],
+      moderationReports: [],
+      growthFeedback: [],
+    })
   },
 
   loadNominations: async () => {
@@ -112,6 +127,26 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     await db.adminResolveModerationReport(reportId)
     set((s) => ({
       moderationReports: s.moderationReports.filter((r) => r.id !== reportId),
+    }))
+  },
+
+  loadGrowthFeedback: async () => {
+    set({ growthFeedbackLoading: true, error: null })
+    try {
+      const growthFeedback = await db.adminListGrowthFeedback()
+      set({ growthFeedback, growthFeedbackLoading: false })
+    } catch (err) {
+      set({
+        growthFeedbackLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to load growth feedback.',
+      })
+    }
+  },
+
+  updateGrowthFeedback: async (id, patch) => {
+    await db.adminUpdateGrowthFeedback(id, patch)
+    set((s) => ({
+      growthFeedback: s.growthFeedback.map((g) => (g.id === id ? { ...g, ...patch } : g)),
     }))
   },
 }))

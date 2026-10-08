@@ -391,6 +391,15 @@ that's confidently wrong. What's needed from you to unblock it:
    StopSpotter's own database (so nothing is lost), it just isn't pushed
    to Brevo yet.
 
+**Interim workflow until the sync is built:** the Support page's "I'd
+support a crowdfund" option (and its two "tell us more" siblings) is meant
+to be followed up in Brevo CRM specifically, same reasoning as above. The
+admin dashboard's **Growth** screen (`/admin/growth`, added in
+`0010_growth_feedback_admin.sql`) lists every submission with the
+crowdfund ones flagged, so an admin can add that person in Brevo by hand
+and then tick **Mark synced to CRM** on that row to track it's done. Once
+the automatic sync above is built, this manual step becomes unnecessary.
+
 ## 11. Enable the disposable-email sign-up block
 
 [`supabase/migrations/0005_disposable_email.sql`](../supabase/migrations/0005_disposable_email.sql)

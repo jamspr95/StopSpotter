@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/admin', label: 'Stops', end: true },
   { to: '/admin/review', label: 'Review' },
   { to: '/admin/moderation', label: 'Moderation' },
+  { to: '/admin/growth', label: 'Growth' },
   { to: '/admin/reports', label: 'Reports' },
 ]
 

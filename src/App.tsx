@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { logEvent } from './lib/analytics'
+import { AdminGrowthScreen } from './screens/admin/AdminGrowthScreen'
 import { AdminLayout } from './screens/admin/AdminLayout'
 import { AdminLoginScreen } from './screens/admin/AdminLoginScreen'
 import { AdminModerationScreen } from './screens/admin/AdminModerationScreen'
@@ -48,6 +49,7 @@ export function App() {
           <Route path="review" element={<AdminReviewScreen />} />
           <Route path="stop/:id" element={<AdminStopDetailScreen />} />
           <Route path="moderation" element={<AdminModerationScreen />} />
+          <Route path="growth" element={<AdminGrowthScreen />} />
           <Route path="reports" element={<AdminReportsScreen />} />
         </Route>
       </Routes>

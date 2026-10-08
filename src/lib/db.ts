@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import type {
   AdminAnalyticsSummaryRow,
+  AdminGrowthFeedback,
   AdminLandownerLead,
   AdminModerationReport,
   AdminNomination,
@@ -641,4 +642,40 @@ export async function adminAnalyticsSummary(): Promise<AdminAnalyticsSummaryRow[
     campaign: row.campaign,
     eventCount: row.event_count,
   }))
+}
+
+interface AdminGrowthFeedbackRow {
+  id: string
+  options: string[]
+  message: string | null
+  email: string | null
+  actioned: boolean
+  crm_synced: boolean
+  created_at: string
+}
+
+export async function adminListGrowthFeedback(): Promise<AdminGrowthFeedback[]> {
+  const { data, error } = await client().rpc('admin_list_growth_feedback')
+  if (error) throw error
+  return (data as AdminGrowthFeedbackRow[]).map((row) => ({
+    id: row.id,
+    options: row.options,
+    message: row.message,
+    email: row.email,
+    actioned: row.actioned,
+    crmSynced: row.crm_synced,
+    createdAt: row.created_at,
+  }))
+}
+
+export async function adminUpdateGrowthFeedback(
+  id: string,
+  patch: { actioned?: boolean; crmSynced?: boolean },
+): Promise<void> {
+  const { error } = await client().rpc('admin_update_growth_feedback', {
+    p_id: id,
+    p_actioned: patch.actioned ?? null,
+    p_crm_synced: patch.crmSynced ?? null,
+  })
+  if (error) throw error
 }

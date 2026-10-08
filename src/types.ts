@@ -137,6 +137,16 @@ export interface AdminAnalyticsSummaryRow {
   eventCount: number
 }
 
+export interface AdminGrowthFeedback {
+  id: string
+  options: string[]
+  message: string | null
+  email: string | null
+  actioned: boolean
+  crmSynced: boolean
+  createdAt: string
+}
+
 export interface AdminModerationReport {
   id: string
   nominationId: string
