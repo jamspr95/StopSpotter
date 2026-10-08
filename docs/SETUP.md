@@ -79,41 +79,74 @@ confirmed unused.)
 The **Email** auth provider (magic link / OTP) is on by default for a new
 Supabase project — nothing to enable there.
 
-### A note on email sending — fix the "this looks like spam" problem
+### A note on email sending — route it through Brevo
 
 Out of the box, Supabase sends the magic-link email itself, from its own
 shared sender (something like `noreply@mail.app.supabase.io`), using its
 own generic template copy. Testers have already flagged this — it doesn't
 look like it's from AireStop or StopSpotter, which is exactly the kind of
-thing that makes a real supporter distrust the email and ignore it. There
-isn't a way to fix this from a coding session — it needs two changes in
-the Supabase dashboard, plus an SMTP provider with a domain you can send
-from:
+thing that makes a real supporter distrust the email and ignore it.
 
-1. **Get a transactional-email sender.** You need something that can send
-   as an address on a domain you control — e.g. `noreply@airestop.co.uk`
-   (if DNS for that domain is available to you) or a subdomain like
-   `stopspotter.airestop.co.uk`. Options: [Resend](https://resend.com)
-   (simplest to set up, has a free tier), Amazon SES, Postmark, SendGrid,
-   or Brevo's transactional email (if the Brevo account from §10 already
-   has it). Whichever you pick, you'll need to verify the sending domain
-   with it (usually adding a couple of DNS TXT/CNAME records) before it'll
-   actually deliver.
-2. **Point Supabase at it.** **Dashboard → Authentication → Settings →
-   SMTP Settings** → enable "Custom SMTP" → enter the host/port/username/
-   password your provider gave you in step 1, and set **Sender email** to
-   the address you verified (e.g. `noreply@airestop.co.uk`) and **Sender
-   name** to something recognisable, like `StopSpotter` or `AireStop`.
-3. **Rewrite the email template.** **Dashboard → Authentication → Email
-   Templates → Magic Link** — the default subject/body is generic
+**Use Brevo for this, not a separate email provider** — it's the account
+StopSpotter already plans to use for supporter marketing and the Deals
+pipeline (`docs/PROJECT_PLAN.md`'s decisions log, §10 below), so sending
+the magic-link email through it too means one account, one sender
+reputation to build up, and one place to look at delivery logs, instead of
+three different tools for "send a sign-in link", "email supporters" and
+"track a sales pipeline". None of this can be done from a coding
+session — it's Brevo dashboard + Supabase dashboard work only you can do:
+
+1. **Verify a sending domain in Brevo.** **Brevo → Senders, Domains & IPs →
+   Domains → Add a domain.** Enter the domain you want to send from — e.g.
+   `airestop.co.uk`, or a subdomain like `stopspotter.airestop.co.uk` if
+   you'd rather not touch the main domain's DNS. Brevo shows you 2–3 DNS
+   records (SPF, DKIM, and a Brevo-code TXT record) to add wherever that
+   domain's DNS is managed; add them, then click **Authenticate this
+   domain** in Brevo once they're in (DNS usually propagates within
+   minutes, sometimes a few hours).
+2. **Add a verified sender.** **Brevo → Senders, Domains & IPs → Senders →
+   Add a sender.** Use an address on the domain you just verified, e.g.
+   `noreply@airestop.co.uk`, with a sender name like `StopSpotter` or
+   `AireStop`.
+3. **Get your Brevo SMTP credentials.** **Brevo → Senders, Domains & IPs →
+   SMTP & API → SMTP tab.** Brevo shows:
+   - **SMTP server**: `smtp-relay.brevo.com`
+   - **Port**: `587`
+   - **Login**: your Brevo account's login email (shown right there)
+   - **Password** / **SMTP key**: click **Generate a new SMTP key** if one
+     isn't already listed — this is *not* your Brevo account password,
+     it's a separate key just for SMTP sending.
+4. **Point Supabase at Brevo.** **Supabase dashboard → Authentication →
+   Settings → SMTP Settings** → enable **Custom SMTP** → fill in:
+   - **Sender email**: the address from step 2
+   - **Sender name**: `StopSpotter` or `AireStop`
+   - **Host**: `smtp-relay.brevo.com`
+   - **Port**: `587`
+   - **Username**: the Login from step 3
+   - **Password**: the SMTP key from step 3
+   Save, then use the "Send test email" option if the page offers one.
+5. **Rewrite the email template.** **Supabase dashboard → Authentication →
+   Email Templates → Magic Link** — the default subject/body is generic
    Supabase copy. Replace it with StopSpotter-branded wording (it accepts
    basic HTML and the `{{ .ConfirmationURL }}` placeholder for the actual
-   link). Do this for any other templates you expect people to see (e.g.
-   "Confirm signup" if email confirmation is ever turned on).
+   link). Do this for any other templates you expect people to see.
+6. **Check it actually sent.** After a real test sign-up, **Brevo →
+   Transactional → Email Activity** should show the send — this is also
+   where you'd see a bounce or block if delivery ever fails, rather than
+   just a missing email with no explanation.
 
 Until this is done, **the rate-limit note still applies too**: Supabase's
 shared sender is rate-limited and fine only for a handful of testers —
 check **Authentication → Rate Limits** if sign-ups stall.
+
+**This makes Brevo send the email — it doesn't, by itself, store the
+email anywhere in Brevo.** Supabase's SMTP setting is a relay: it hands
+Brevo a message to deliver and nothing more, it doesn't create a Brevo
+Contact. StopSpotter already asks every sign-up for "Send me news" /
+"Tell me about ways to support AireStop" consent (`consents` table) —
+actually turning those into Brevo contacts/list members for real
+marketing use is a separate, not-yet-built integration. See **§10a**
+below for what that needs from you.
 
 ## 6. Set up Google, Apple and Facebook sign-in (optional)
 
@@ -313,8 +346,50 @@ linked Brevo deal changes pipeline stage.
 doesn't have to be manual) needs a real API key to get Brevo's request
 shape right and verify it actually works — that's an external-account
 dependency this environment can't satisfy, not a decision to skip it.
-Same for syncing opted-in supporters to Brevo's marketing lists. Both stay
-on the Milestone 3 checklist in `docs/BUILD_PLAN.md` as open.
+Same for syncing opted-in supporters to Brevo's marketing lists (§10a
+below). Both stay on the Milestone 3 checklist in `docs/BUILD_PLAN.md` as
+open.
+
+## 10a. Store sign-up emails in Brevo as contacts (not built yet)
+
+The SMTP setup above makes Brevo *send* the magic-link email — it doesn't
+make Brevo *keep* that email address anywhere. Every StopSpotter sign-up
+already records consent for two things (the `consents` table, captured by
+the checkboxes on the sign-up screen):
+
+- **"Send me news about StopSpotter and AireStop"** — general updates
+- **"Tell me about ways to support AireStop, like memberships and
+  crowdfunding"** — supporter/funding interest
+
+Turning those into real, usable Brevo contacts needs a small integration
+(a Supabase Edge Function or a database webhook calling Brevo's Contacts
+API on sign-up) that hasn't been built — same reasoning as the Deals
+auto-creation above: guessing Brevo's API request shape without a real
+account and a real list to test against risks shipping integration code
+that's confidently wrong. What's needed from you to unblock it:
+
+1. **Create the list(s) in Brevo.** **Brevo → Contacts → Lists → Create a
+   list.** At minimum, one list for "StopSpotter news" (anyone who ticked
+   the first checkbox). If you want supporter-interest people tracked
+   separately from general news subscribers, create a second list for
+   that too, e.g. "StopSpotter — support interest" — matches how
+   landowner-only contacts are already kept on their own list, away from
+   marketing sends (`docs/PROJECT_PLAN.md`'s decisions log).
+2. **Note each list's ID.** Click into the list — its ID is in the URL
+   (`.../contacts/lists/<id>`) or shown on the list's own page. You'll
+   need these numbers, not just the list names.
+3. **Generate a Brevo API key** (different from the SMTP key above —
+   this one's for the Contacts API, not sending mail). **Brevo → SMTP &
+   API → API Keys tab → Generate a new API key.** Name it something
+   identifiable, like `stopspotter-contacts-sync`.
+4. **Send me the list ID(s) and the API key** (the key specifically —
+   paste it in chat or add it as a Supabase Edge Function secret yourself
+   if you'd rather not share it directly; either way, tell me once it's
+   in place) and I'll build the sync: a new row in `consents` with
+   `granted = true` adds that person to the matching Brevo list, with
+   their first name if they gave one. Until then, consent is recorded in
+   StopSpotter's own database (so nothing is lost), it just isn't pushed
+   to Brevo yet.
 
 ## 11. Enable the disposable-email sign-up block
 
