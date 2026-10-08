@@ -122,7 +122,7 @@ export function SupportScreen() {
         <div className="mt-8 rounded-xl bg-slate-50 p-4">
           <p className="text-sm font-medium text-slate-700">Help us grow</p>
           <p className="mt-2 text-sm text-slate-600">
-            We're exploring how to grow and develop StopSpotter faster. If any of this applies
+            We're exploring how to grow the UK's network of aires faster. If any of this applies
             to you, tap it below. It'll never change a stop's votes or ranking, it's a separate
             way to help.
           </p>
