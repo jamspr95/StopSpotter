@@ -130,6 +130,16 @@ interface AppState {
    * until the email is confirmed.
    */
   finalizePendingFlow: (identity: Identity) => Promise<void>
+  /**
+   * Skips the email ask entirely for someone who's already signed in —
+   * writes whatever's pending (nomination/vote/growth feedback) against
+   * the existing currentUser, no magic link or SSO round trip needed. A
+   * returning supporter should only ever give their email once, on their
+   * first nomination or vote; this is what makes every flow after that
+   * one not re-ask for it. SignUpScreen calls this instead of rendering
+   * its form when currentUser is already set.
+   */
+  completePendingFlowAsCurrentUser: () => Promise<void>
   /** Local-only mode's simulated magic-link click. */
   confirmMagicLink: () => void
   /**
@@ -259,20 +269,22 @@ async function ensureNominationSaved(
   return id
 }
 
-/** Real-backend mode: writes whatever's in pendingFlow/pendingIdentity now that a session exists. Called from initRealBackend's auth listener. */
-async function completePendingSignIn(
+type ResolvedPendingFlow = Exclude<PendingFlow, null>
+
+/**
+ * Writes whatever a pending flow needs written, against an already-known
+ * userId/email — the part completePendingSignIn and
+ * completePendingFlowAsCurrentUser (below) share. Real-backend mode only
+ * (local-only mode's equivalent stays separate, see
+ * completePendingFlowAsCurrentUser).
+ */
+async function writePendingFlowRecord(
   get: () => AppState,
   set: (partial: Partial<AppState>) => void,
+  pendingFlow: ResolvedPendingFlow,
   userId: string,
   email: string,
-) {
-  const { pendingFlow, pendingIdentity } = get()
-  if (!pendingFlow || !pendingIdentity) return
-
-  await db.upsertProfile(userId, pendingIdentity.firstName, 'facebook')
-  const consents = buildConsents(pendingIdentity)
-  await db.insertConsents(userId, consents)
-
+): Promise<void> {
   if (pendingFlow.type === 'nomination') {
     // Normally already saved (anonymous) by ensureNominationSaved before
     // this screen was ever reached — this call is then a no-op that just
@@ -314,6 +326,23 @@ async function completePendingSignIn(
     const draft = pendingFlow.draft
     await db.insertGrowthFeedback(draft.options, draft.message ?? null, email)
   }
+}
+
+/** Real-backend mode: writes whatever's in pendingFlow/pendingIdentity now that a session exists. Called from initRealBackend's auth listener. */
+async function completePendingSignIn(
+  get: () => AppState,
+  set: (partial: Partial<AppState>) => void,
+  userId: string,
+  email: string,
+) {
+  const { pendingFlow, pendingIdentity } = get()
+  if (!pendingFlow || !pendingIdentity) return
+
+  await db.upsertProfile(userId, pendingIdentity.firstName, 'facebook')
+  const consents = buildConsents(pendingIdentity)
+  await db.insertConsents(userId, consents)
+
+  await writePendingFlowRecord(get, set, pendingFlow, userId, email)
 
   set({
     currentUser: { id: userId, email, firstName: pendingIdentity.firstName, verified: true, consents },
@@ -461,6 +490,61 @@ export const useAppStore = create<AppState>()(
             awaitingVerificationKind: 'growth_feedback',
           })
         }
+      },
+
+      completePendingFlowAsCurrentUser: async () => {
+        const { pendingFlow, currentUser } = get()
+        if (!pendingFlow || !currentUser) return
+
+        if (isSupabaseConfigured) {
+          if (!currentUser.email) return
+          await writePendingFlowRecord(get, set, pendingFlow, currentUser.id, currentUser.email)
+          set({ pendingFlow: null })
+          return
+        }
+
+        // ── Local-only mode — same shape as finalizePendingFlow's local
+        // branch, minus the "wait for confirmMagicLink" step: there's
+        // already a local currentUser, so this writes straight away,
+        // verified, same as a real returning session would. ──
+        const userId = currentUser.id
+        if (pendingFlow.type === 'nomination') {
+          const savedId = await ensureNominationSaved(pendingFlow, get, set)
+          set((s) => ({
+            nominations: s.nominations.map((n) =>
+              n.id === savedId ? { ...n, userId, verified: true } : n,
+            ),
+          }))
+        } else if (pendingFlow.type === 'vote') {
+          const draft = pendingFlow.draft
+          const vote: Vote = {
+            id: `vote-${crypto.randomUUID()}`,
+            userId,
+            nominationId: draft.nominationId,
+            payBand: draft.payBand ?? 'free_only',
+            verified: true,
+            createdAt: new Date().toISOString(),
+          }
+          set((s) => ({ votes: [...s.votes, vote] }))
+
+          if (draft.ownerType) {
+            set((s) => ({
+              nominations: s.nominations.map((n) =>
+                n.id === draft.nominationId
+                  ? {
+                      ...n,
+                      answers: { ...n.answers, ownerType: draft.ownerType! },
+                      landowner: draft.landowner ?? n.landowner,
+                    }
+                  : n,
+              ),
+            }))
+          }
+        }
+        // growth_feedback: local-only mode has no backend table to write to
+        // — same as finalizePendingFlow's local-only branch, nothing to do.
+
+        set({ pendingFlow: null })
       },
 
       confirmMagicLink: () => {

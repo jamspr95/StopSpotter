@@ -15,9 +15,11 @@ const SSO_PROVIDERS: Array<{ id: SSOProvider; label: string }> = [
 export function SignUpScreen() {
   const navigate = useNavigate()
   const pendingFlow = useAppStore((s) => s.pendingFlow)
+  const currentUser = useAppStore((s) => s.currentUser)
   const awaitingVerificationId = useAppStore((s) => s.awaitingVerificationId)
   const authMethod = useAppStore((s) => s.authMethod)
   const finalizePendingFlow = useAppStore((s) => s.finalizePendingFlow)
+  const completePendingFlowAsCurrentUser = useAppStore((s) => s.completePendingFlowAsCurrentUser)
   const confirmMagicLink = useAppStore((s) => s.confirmMagicLink)
   const signInWithSSO = useAppStore((s) => s.signInWithSSO)
   const cancelPendingFlow = useAppStore((s) => s.cancelPendingFlow)
@@ -28,6 +30,7 @@ export function SignUpScreen() {
   const [support, setSupport] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [continuingError, setContinuingError] = useState<string | null>(null)
 
   // Captured once at mount, not re-read on every pendingFlow change: completing the
   // flow (finalizePendingFlow / confirmMagicLink) clears pendingFlow and navigates
@@ -35,6 +38,11 @@ export function SignUpScreen() {
   // and bounce the user back to "/" instead.
   const [hadPendingFlowOnMount] = useState(() => pendingFlow !== null)
   const [flowTypeOnMount] = useState(() => pendingFlow?.type ?? null)
+  // A returning supporter should only ever be asked for their email once —
+  // if they're already signed in (a real session from last time, or the
+  // local-only equivalent), skip this screen's form entirely rather than
+  // asking again on every nomination/vote.
+  const [alreadySignedInOnMount] = useState(() => currentUser !== null && currentUser.verified)
   // Real-backend mode: a page reload (the magic-link email click, or the
   // OAuth provider's redirect back) lands back on this exact route and
   // remounts this component with authMethod still set from before the
@@ -53,7 +61,53 @@ export function SignUpScreen() {
     }
   }, [wasAwaitingAuthOnMount, pendingFlow, flowTypeOnMount, navigate])
 
+  useEffect(() => {
+    if (!hadPendingFlowOnMount || !alreadySignedInOnMount) return
+    completePendingFlowAsCurrentUser()
+      .then(() => navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } }))
+      .catch((err) => {
+        console.error('StopSpotter: failed to continue as the signed-in user.', err)
+        setContinuingError(err instanceof Error ? err.message : 'Something went wrong — please try again.')
+      })
+  }, [hadPendingFlowOnMount, alreadySignedInOnMount, completePendingFlowAsCurrentUser, navigate, flowTypeOnMount])
+
   if (!pendingFlow) return null
+
+  if (alreadySignedInOnMount) {
+    return (
+      <div className="flex h-dvh flex-col">
+        <ScreenHeader title="Almost done" onBack={false} />
+        <div className="flex-1 p-4">
+          {continuingError ? (
+            <>
+              <p className="text-base text-slate-700">{continuingError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setContinuingError(null)
+                  completePendingFlowAsCurrentUser()
+                    .then(() => navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } }))
+                    .catch((err) => {
+                      console.error('StopSpotter: failed to continue as the signed-in user.', err)
+                      setContinuingError(
+                        err instanceof Error ? err.message : 'Something went wrong — please try again.',
+                      )
+                    })
+                }}
+                className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+              >
+                Try again
+              </button>
+            </>
+          ) : (
+            <p className="text-base text-slate-700">
+              Continuing as <span className="font-medium">{currentUser?.email}</span>…
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const isNomination = pendingFlow.type === 'nomination'
   const isGrowthFeedback = pendingFlow.type === 'growth_feedback'
