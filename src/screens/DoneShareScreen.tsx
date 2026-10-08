@@ -81,7 +81,7 @@ export function DoneShareScreen() {
           onClick={() => navigate('/')}
           className="mt-4 w-full rounded-xl border border-slate-200 py-3.5 text-base font-semibold text-slate-700"
         >
-          Vote on nearby stops
+          Return to map
         </button>
 
         <button
@@ -89,7 +89,7 @@ export function DoneShareScreen() {
           onClick={() => navigate('/support')}
           className="mt-4 w-full text-center text-sm font-medium text-brand-700 underline"
         >
-          See how you can back AireStop
+          See how else you can support AireStop
         </button>
       </div>
     </div>
