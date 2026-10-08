@@ -7,6 +7,7 @@ import { ScreenHeader } from '../components/ScreenHeader'
 import { MAP_CENTRE } from '../data/seed'
 import * as db from '../lib/db'
 import { findDuplicateWithin200m } from '../lib/geo'
+import { searchLocation } from '../lib/geocode'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 import type { LatLng } from '../types'
@@ -36,9 +37,32 @@ export function DropPinScreen() {
   const [centre, setCentre] = useState<LatLng>(initialCentre)
   const [locating, setLocating] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const nominations = useAppStore((s) => s.nominations)
   const beginNomination = useAppStore((s) => s.beginNomination)
   const beginVote = useAppStore((s) => s.beginVote)
+
+  async function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const q = searchQuery.trim()
+    if (!q) return
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const result = await searchLocation(q)
+      if (!result) {
+        setSearchError(`Couldn't find "${q}". Try a different place name or postcode.`)
+        return
+      }
+      mapRef.current?.setView(result.point, 15)
+      // Centres the map only, same as "Use my location" — nothing from the
+      // search is stored until a pin is actually confirmed.
+    } finally {
+      setSearching(false)
+    }
+  }
 
   function handleUseMyLocation() {
     if (!navigator.geolocation) return
@@ -93,12 +117,27 @@ export function DropPinScreen() {
       <ScreenHeader title="Drop a pin" />
 
       <div className="border-b border-slate-200 p-4">
-        <input
-          type="text"
-          placeholder="Search a place or postcode (coming soon, drag the map for now)"
-          disabled
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
-        />
+        <form onSubmit={handleSearchSubmit} className="flex gap-2">
+          <input
+            type="search"
+            enterKeyHint="search"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setSearchError(null)
+            }}
+            placeholder="Search a place or postcode"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800"
+          />
+          <button
+            type="submit"
+            disabled={searching || searchQuery.trim() === ''}
+            className="flex-shrink-0 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {searching ? '…' : 'Search'}
+          </button>
+        </form>
+        {searchError && <p className="mt-2 text-xs text-red-600">{searchError}</p>}
         <p className="mt-2 text-xs text-slate-500">
           Ideal stops are unused, flat land close to amenities and services. Think water,
           drainage, and a pub or shop within easy reach.
