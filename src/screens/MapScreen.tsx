@@ -156,18 +156,18 @@ export function MapScreen() {
 
       {!hasSeenIntro && (
         <div className="absolute inset-0 z-30 flex items-end bg-slate-900/40 p-4">
-          <div className="w-full rounded-2xl bg-white p-5 shadow-xl">
+          <div className="w-full rounded-2xl bg-white p-6 shadow-xl">
             <h2 className="font-display text-lg font-bold text-slate-900">
               Help build the UK's motorhome stop network
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              AireStop is on a mission to build a network of motorhome stopovers across the UK
-              — and we need your help.
+            <p className="mt-3 text-sm text-slate-600">
+              AireStop is on a mission to build a network of motorhome stopovers across the UK,
+              and we need your help.
             </p>
-            <ol className="mt-3 flex flex-col gap-2 text-sm text-slate-600">
+            <ol className="mt-4 flex flex-col gap-3 text-sm text-slate-600">
               <li>
                 <span className="font-semibold text-slate-800">1. Spot a stop.</span> Know a
-                good place you'd like to stay? Tell us about it — if we agree, we'll approach
+                good place you'd like to stay? Tell us about it. If we agree, we'll approach
                 the landowner and work to make it happen.
               </li>
               <li>
@@ -176,8 +176,8 @@ export function MapScreen() {
                 the demand is real.
               </li>
             </ol>
-            <p className="mt-3 text-sm text-slate-600">
-              Anyone can browse — we'll only ask for your email when you nominate or vote.
+            <p className="mt-4 text-sm text-slate-600">
+              Anyone can browse. We'll only ask for your email when you nominate or vote.
             </p>
             <button
               type="button"

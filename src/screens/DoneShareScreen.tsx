@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Confetti } from '../components/Confetti'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { logEvent, withCampaignParam } from '../lib/analytics'
 
@@ -10,6 +11,7 @@ export function DoneShareScreen() {
     (location.state as { flowType?: 'nomination' | 'vote' | 'growth_feedback' } | null)
       ?.flowType ?? 'nomination'
   const [copied, setCopied] = useState(false)
+  const [showConfetti, setShowConfetti] = useState(true)
 
   const isNomination = flowType === 'nomination'
   const isGrowthFeedback = flowType === 'growth_feedback'
@@ -18,10 +20,10 @@ export function DoneShareScreen() {
     'share',
   )
   const shareText = isNomination
-    ? "I just spotted a potential motorhome aire for AireStop — have a look on StopSpotter"
+    ? 'I just spotted a potential motorhome aire for AireStop. Have a look on StopSpotter.'
     : isGrowthFeedback
-      ? "I'm backing AireStop's mission to build a UK motorhome stop network — check out StopSpotter"
-      : "I just backed a potential motorhome aire on StopSpotter — go vote on one near you"
+      ? "I'm backing AireStop's mission to build a UK motorhome stop network. Check out StopSpotter."
+      : 'I just backed a potential motorhome aire on StopSpotter. Go and vote on one near you.'
 
   // Logged once, on arrival at this screen — this is the funnel's
   // conversion moment (docs/BUILD_PLAN.md "Monitor funnel (click →
@@ -50,31 +52,34 @@ export function DoneShareScreen() {
 
   return (
     <div className="flex h-dvh flex-col">
+      {(isNomination || !isGrowthFeedback) && showConfetti && (
+        <Confetti onDone={() => setShowConfetti(false)} />
+      )}
       <ScreenHeader
-        title={isNomination ? 'Your stop is in' : isGrowthFeedback ? 'Thanks for letting us know' : 'Thanks for voting'}
+        title={isNomination ? 'Thank you for your stop' : isGrowthFeedback ? 'Thanks for letting us know' : 'Thank you for voting'}
         onBack={false}
       />
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         <p className="text-base text-slate-700">
           {isNomination
-            ? "Thanks — we'll let you know what happens to it in My Stops."
+            ? "Thank you for supporting AireStop. We'll let you know what happens to your stop in My Stops."
             : isGrowthFeedback
               ? "We'll be in touch."
-              : 'Your vote adds to the demand evidence for this stop.'}
+              : "Thank you for supporting AireStop. Your vote adds to the demand evidence for this stop."}
         </p>
 
         <button
           type="button"
           onClick={handleShare}
-          className="mt-5 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+          className="mt-6 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
         >
-          {copied ? 'Copied — paste it anywhere' : 'Share'}
+          {copied ? 'Copied, paste it anywhere' : 'Share'}
         </button>
 
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="mt-3 w-full rounded-xl border border-slate-200 py-3.5 text-base font-semibold text-slate-700"
+          className="mt-4 w-full rounded-xl border border-slate-200 py-3.5 text-base font-semibold text-slate-700"
         >
           Vote on nearby stops
         </button>
@@ -82,7 +87,7 @@ export function DoneShareScreen() {
         <button
           type="button"
           onClick={() => navigate('/support')}
-          className="mt-3 w-full text-center text-sm font-medium text-brand-700 underline"
+          className="mt-4 w-full text-center text-sm font-medium text-brand-700 underline"
         >
           See how you can back AireStop
         </button>

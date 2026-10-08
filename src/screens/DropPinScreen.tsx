@@ -92,16 +92,16 @@ export function DropPinScreen() {
     <div className="flex h-dvh flex-col">
       <ScreenHeader title="Drop a pin" />
 
-      <div className="border-b border-slate-200 p-3">
+      <div className="border-b border-slate-200 p-4">
         <input
           type="text"
-          placeholder="Search a place or postcode (coming soon — drag the map for now)"
+          placeholder="Search a place or postcode (coming soon, drag the map for now)"
           disabled
           className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
         />
         <p className="mt-2 text-xs text-slate-500">
-          Ideal stops are unused, flat land close to amenities and services — think water,
-          drainage, a pub or shop within easy reach.
+          Ideal stops are unused, flat land close to amenities and services. Think water,
+          drainage, and a pub or shop within easy reach.
         </p>
       </div>
 

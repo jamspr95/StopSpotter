@@ -52,7 +52,7 @@ export function StopCardScreen() {
   return (
     <div className="flex h-dvh flex-col bg-white">
       <ScreenHeader title="Stop" />
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
           {STATUS_LABEL[nomination.status]}
         </p>
@@ -70,19 +70,19 @@ export function StopCardScreen() {
         )}
 
         {nomination.whyHere && (
-          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm italic text-slate-700">
+          <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm italic text-slate-700">
             "{nomination.whyHere}"
           </p>
         )}
 
         {nearby.length > 0 && (
-          <div className="mt-4">
+          <div className="mt-5">
             <p className="text-sm font-medium text-slate-700">Nearby</p>
             <p className="text-sm text-slate-600">{nearby.join(', ').replace(/_/g, ' ')}</p>
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-4 rounded-xl bg-brand-50 p-3">
+        <div className="mt-5 flex items-center gap-4 rounded-xl bg-brand-50 p-3">
           <div>
             <p className="text-2xl font-bold text-brand-800">{votes.length}</p>
             <p className="text-xs text-brand-700">

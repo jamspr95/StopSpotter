@@ -72,7 +72,7 @@ export function NominationFormScreen() {
       <ScreenHeader title="Nominate a stop" onBack={goBackStep} />
       <ProgressBar step={stepIndex} total={steps.length} />
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         {saving ? (
           <p className="pt-10 text-center text-sm text-slate-500">Saving your stop…</p>
         ) : (
@@ -230,7 +230,7 @@ function LandownerStep({
     <div>
       <h2 className="font-display text-lg font-semibold text-slate-900">A bit about the owner</h2>
       <p className="mt-1 text-sm text-slate-500">
-        This is kept private and used for outreach only — never shown publicly.
+        This is kept private and used for outreach only. It's never shown publicly.
       </p>
 
       <label className="mt-4 block text-sm font-medium text-slate-700">

@@ -16,7 +16,7 @@ export function MyStopsScreen() {
   return (
     <div className="flex h-dvh flex-col">
       <ScreenHeader title="My Stops" />
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         {!currentUser && (
           <p className="text-sm text-slate-500">
             Nominate or vote on a stop and sign up to see it here.
@@ -25,14 +25,14 @@ export function MyStopsScreen() {
 
         {currentUser && nominations.length === 0 && votes.length === 0 && (
           <p className="text-sm text-slate-500">
-            Nothing yet — nominate a stop or vote on one from the map.
+            Nothing here yet. Nominate a stop or vote on one from the map.
           </p>
         )}
 
         {nominations.length > 0 && (
-          <div className="mb-6">
-            <h2 className="mb-2 text-sm font-semibold text-slate-500">Nominations</h2>
-            <ul className="flex flex-col gap-2">
+          <div className="mb-7">
+            <h2 className="mb-3 text-sm font-semibold text-slate-500">Nominations</h2>
+            <ul className="flex flex-col gap-3">
               {nominations.map((n) => (
                 <li key={n.id}>
                   <button
@@ -55,8 +55,8 @@ export function MyStopsScreen() {
 
         {votes.length > 0 && (
           <div>
-            <h2 className="mb-2 text-sm font-semibold text-slate-500">Votes</h2>
-            <ul className="flex flex-col gap-2">
+            <h2 className="mb-3 text-sm font-semibold text-slate-500">Votes</h2>
+            <ul className="flex flex-col gap-3">
               {votes.map((v) => {
                 const stop = allNominations.find((n) => n.id === v.nominationId)
                 return (

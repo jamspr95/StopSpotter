@@ -52,10 +52,10 @@ export function VoteScreen() {
       <ScreenHeader title="Vote" onBack={() => (stepIndex === 0 ? navigate(-1) : setStepIndex((i) => i - 1))} />
       <ProgressBar step={stepIndex} total={steps.length} />
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         {duplicateNotice && stepIndex === 0 && (
           <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-            Someone's already spotted this — add your vote?
+            Someone's already spotted this. Would you like to add your vote?
           </div>
         )}
 
@@ -63,7 +63,7 @@ export function VoteScreen() {
           <div>
             <h2 className="font-display text-lg font-semibold text-slate-900">{ownerQuestion.prompt}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              The owner isn't known yet — your answer helps establish it.
+              The owner isn't known yet. Your answer helps establish it.
             </p>
             <div className="mt-3">
               <ChoiceButtons
@@ -118,7 +118,7 @@ function LandownerStep({
   return (
     <div>
       <h2 className="font-display text-lg font-semibold text-slate-900">A bit about the owner</h2>
-      <p className="mt-1 text-sm text-slate-500">Kept private — used for outreach only.</p>
+      <p className="mt-1 text-sm text-slate-500">Kept private, and used for outreach only.</p>
 
       <label className="mt-4 block text-sm font-medium text-slate-700">
         Owner's name or organisation

@@ -67,7 +67,7 @@ export function SignUpScreen() {
       .then(() => navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } }))
       .catch((err) => {
         console.error('StopSpotter: failed to continue as the signed-in user.', err)
-        setContinuingError(err instanceof Error ? err.message : 'Something went wrong — please try again.')
+        setContinuingError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       })
   }, [hadPendingFlowOnMount, alreadySignedInOnMount, completePendingFlowAsCurrentUser, navigate, flowTypeOnMount])
 
@@ -77,7 +77,7 @@ export function SignUpScreen() {
     return (
       <div className="flex h-dvh flex-col">
         <ScreenHeader title="Almost done" onBack={false} />
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-5">
           {continuingError ? (
             <>
               <p className="text-base text-slate-700">{continuingError}</p>
@@ -90,7 +90,7 @@ export function SignUpScreen() {
                     .catch((err) => {
                       console.error('StopSpotter: failed to continue as the signed-in user.', err)
                       setContinuingError(
-                        err instanceof Error ? err.message : 'Something went wrong — please try again.',
+                        err instanceof Error ? err.message : 'Something went wrong. Please try again.',
                       )
                     })
                 }}
@@ -122,7 +122,7 @@ export function SignUpScreen() {
     try {
       await finalizePendingFlow({ email, firstName: firstName || undefined, news, support })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong — please try again.')
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       setSubmitting(false)
     }
   }
@@ -135,7 +135,7 @@ export function SignUpScreen() {
       // No navigation here — signInWithOAuth takes the browser to the
       // provider's consent screen itself; this line may never run.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong — please try again.')
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       setSubmitting(false)
     }
   }
@@ -144,14 +144,14 @@ export function SignUpScreen() {
     return (
       <div className="flex h-dvh flex-col">
         <ScreenHeader title="Check your email" onBack={false} />
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-5">
           <p className="text-base text-slate-700">
             We've sent a link to <span className="font-medium">{email}</span>. Click it to
             confirm {confirmWhat}.
           </p>
           <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-500">
-            Prototype note: no email is actually sent yet — that needs a live Supabase project
-            (see docs/SETUP.md). Use the button below to simulate clicking the link.
+            Prototype note: no email is actually sent yet. That needs a live Supabase project,
+            see docs/SETUP.md. Use the button below to simulate clicking the link.
           </div>
           <button
             type="button"
@@ -175,10 +175,10 @@ export function SignUpScreen() {
     return (
       <div className="flex h-dvh flex-col">
         <ScreenHeader title="Check your email" onBack={false} />
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-5">
           <p className="text-base text-slate-700">
             We've sent a link to <span className="font-medium">{email}</span>. Open it on this
-            device to confirm {confirmWhat} — this page will carry on automatically once you do.
+            device to confirm {confirmWhat}, and this page will carry on automatically once you do.
           </p>
         </div>
       </div>
@@ -194,7 +194,7 @@ export function SignUpScreen() {
           navigate(-1)
         }}
       />
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-5">
         {isSupabaseConfigured && isSSOEnabled && (
           <>
             <div className="flex flex-col gap-2">
@@ -210,7 +210,7 @@ export function SignUpScreen() {
                 </button>
               ))}
             </div>
-            <div className="my-5 flex items-center gap-3">
+            <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-slate-200" />
               <span className="text-xs font-medium text-slate-400">OR</span>
               <div className="h-px flex-1 bg-slate-200" />
@@ -228,12 +228,12 @@ export function SignUpScreen() {
         />
         {emailIsDisposable && (
           <p className="mt-1 text-xs text-red-600">
-            That looks like a temporary/disposable email address — please use one you can
+            That looks like a temporary or disposable email address. Please use one you can
             actually receive mail at.
           </p>
         )}
 
-        <label className="mt-4 block text-sm font-medium text-slate-700">
+        <label className="mt-5 block text-sm font-medium text-slate-700">
           First name (optional)
         </label>
         <input
@@ -243,15 +243,15 @@ export function SignUpScreen() {
           className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-base"
         />
 
-        <p className="mt-5 text-sm text-slate-600">
+        <p className="mt-6 text-sm text-slate-600">
           {isGrowthFeedback
             ? "We'll use your email to sign you in, check you're genuine, and get back to you about this."
             : isNomination
-              ? "Your stop's already noted — we'll use your email to sign you in, check it's genuine, and tell you what happens to it."
+              ? "We've already noted your stop. We'll use your email to sign you in, check it's genuine, and tell you what happens to it."
               : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
         </p>
 
-        <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+        <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={news}
@@ -260,7 +260,7 @@ export function SignUpScreen() {
           />
           Send me news about StopSpotter and AireStop.
         </label>
-        <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+        <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
             checked={support}
@@ -278,7 +278,7 @@ export function SignUpScreen() {
           type="button"
           disabled={!emailValid || submitting}
           onClick={handleSendLink}
-          className="mt-6 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-7 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white disabled:opacity-40"
         >
           {submitting ? 'Sending…' : 'Send my link'}
         </button>

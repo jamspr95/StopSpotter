@@ -32,3 +32,14 @@ body {
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--confetti-drift, 0), 100vh) rotate(var(--confetti-rotate, 180deg));
+    opacity: 0.9;
+  }
+}
