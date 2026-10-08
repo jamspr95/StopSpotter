@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import type { NavigateFunction } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
-import type { SSOProvider } from '../lib/db'
+import { logEvent } from '../lib/analytics'
+import { DUPLICATE_VOTE_MESSAGE, type SSOProvider } from '../lib/db'
 import { isDisposableEmail } from '../lib/disposableEmail'
 import { isSSOEnabled, isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
@@ -12,8 +14,29 @@ const SSO_PROVIDERS: Array<{ id: SSOProvider; label: string }> = [
   { id: 'facebook', label: 'Continue with Facebook' },
 ]
 
+/**
+ * nomination/vote still get the dedicated thank-you page (confetti,
+ * share buttons). growth_feedback doesn't — it's a toast on the Support
+ * page, not a new page (SupportScreen reads growthFeedbackThanks), so a
+ * supporter who had to leave Support to give an email lands straight back
+ * there instead of on an unrelated screen.
+ */
+function navigateAfterFlow(
+  navigate: NavigateFunction,
+  flowType: 'nomination' | 'vote' | 'growth_feedback',
+  fromPath: string,
+) {
+  if (flowType === 'growth_feedback') {
+    logEvent('growth_feedback_submit', fromPath)
+    navigate('/support', { state: { growthFeedbackThanks: true } })
+  } else {
+    navigate('/done', { state: { flowType } })
+  }
+}
+
 export function SignUpScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
   const pendingFlow = useAppStore((s) => s.pendingFlow)
   const currentUser = useAppStore((s) => s.currentUser)
   const awaitingVerificationId = useAppStore((s) => s.awaitingVerificationId)
@@ -57,19 +80,19 @@ export function SignUpScreen() {
 
   useEffect(() => {
     if (wasAwaitingAuthOnMount && !pendingFlow) {
-      navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } })
+      navigateAfterFlow(navigate, flowTypeOnMount ?? 'nomination', location.pathname)
     }
-  }, [wasAwaitingAuthOnMount, pendingFlow, flowTypeOnMount, navigate])
+  }, [wasAwaitingAuthOnMount, pendingFlow, flowTypeOnMount, navigate, location.pathname])
 
   useEffect(() => {
     if (!hadPendingFlowOnMount || !alreadySignedInOnMount) return
     completePendingFlowAsCurrentUser()
-      .then(() => navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } }))
+      .then(() => navigateAfterFlow(navigate, flowTypeOnMount ?? 'nomination', location.pathname))
       .catch((err) => {
         console.error('StopSpotter: failed to continue as the signed-in user.', err)
         setContinuingError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
       })
-  }, [hadPendingFlowOnMount, alreadySignedInOnMount, completePendingFlowAsCurrentUser, navigate, flowTypeOnMount])
+  }, [hadPendingFlowOnMount, alreadySignedInOnMount, completePendingFlowAsCurrentUser, navigate, flowTypeOnMount, location.pathname])
 
   if (!pendingFlow) return null
 
@@ -81,23 +104,39 @@ export function SignUpScreen() {
           {continuingError ? (
             <>
               <p className="text-base text-slate-700">{continuingError}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setContinuingError(null)
-                  completePendingFlowAsCurrentUser()
-                    .then(() => navigate('/done', { state: { flowType: flowTypeOnMount ?? 'nomination' } }))
-                    .catch((err) => {
-                      console.error('StopSpotter: failed to continue as the signed-in user.', err)
-                      setContinuingError(
-                        err instanceof Error ? err.message : 'Something went wrong. Please try again.',
-                      )
-                    })
-                }}
-                className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
-              >
-                Try again
-              </button>
+              {continuingError === DUPLICATE_VOTE_MESSAGE ? (
+                // Retrying can't ever succeed here — it's not a transient
+                // failure, the vote already exists — so offer a way out
+                // instead of a "Try again" button that would only fail again.
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelPendingFlow()
+                    navigate('/')
+                  }}
+                  className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+                >
+                  Back to map
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setContinuingError(null)
+                    completePendingFlowAsCurrentUser()
+                      .then(() => navigateAfterFlow(navigate, flowTypeOnMount ?? 'nomination', location.pathname))
+                      .catch((err) => {
+                        console.error('StopSpotter: failed to continue as the signed-in user.', err)
+                        setContinuingError(
+                          err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+                        )
+                      })
+                  }}
+                  className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
+                >
+                  Try again
+                </button>
+              )}
             </>
           ) : (
             <p className="text-base text-slate-700">
@@ -157,7 +196,7 @@ export function SignUpScreen() {
             type="button"
             onClick={() => {
               confirmMagicLink()
-              navigate('/done', { state: { flowType: pendingFlow.type } })
+              navigateAfterFlow(navigate, pendingFlow.type, location.pathname)
             }}
             className="mt-4 w-full rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white active:bg-brand-700"
           >

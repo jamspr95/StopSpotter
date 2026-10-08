@@ -451,6 +451,12 @@ export const useAppStore = create<AppState>()(
           set({ awaitingVerificationId: savedId, awaitingVerificationKind: 'nomination' })
         } else if (flow.type === 'vote') {
           const d = flow.draft
+          // Mirrors the real backend's unique(user_id, nomination_id)
+          // constraint (0001_init.sql) — local-only mode has no database to
+          // enforce it, so it's checked here instead, same message either way.
+          if (state.votes.some((v) => v.userId === userId && v.nominationId === d.nominationId)) {
+            throw new Error(db.DUPLICATE_VOTE_MESSAGE)
+          }
           const vote: Vote = {
             id: `vote-${crypto.randomUUID()}`,
             userId,
@@ -517,6 +523,12 @@ export const useAppStore = create<AppState>()(
           }))
         } else if (pendingFlow.type === 'vote') {
           const draft = pendingFlow.draft
+          // Same duplicate check as finalizePendingFlow's local-only vote
+          // branch above — this is the path a returning, already-signed-in
+          // user hits, which is the common case for a second vote attempt.
+          if (get().votes.some((v) => v.userId === userId && v.nominationId === draft.nominationId)) {
+            throw new Error(db.DUPLICATE_VOTE_MESSAGE)
+          }
           const vote: Vote = {
             id: `vote-${crypto.randomUUID()}`,
             userId,

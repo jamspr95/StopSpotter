@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
+import { ThanksBanner } from '../components/ThanksBanner'
 import { GROWTH_OPTION_CROWDFUND, GROWTH_OPTIONS } from '../data/growthOptions'
+import { logEvent } from '../lib/analytics'
 import { useAppStore } from '../store/useAppStore'
 
 const FOLLOW_UP_PROMPT: Record<string, { label: string; placeholder: string }> = {
@@ -17,29 +19,69 @@ const FOLLOW_UP_PROMPT: Record<string, { label: string; placeholder: string }> =
 
 export function SupportScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const currentUser = useAppStore((s) => s.currentUser)
   const beginGrowthFeedback = useAppStore((s) => s.beginGrowthFeedback)
+  const completePendingFlowAsCurrentUser = useAppStore((s) => s.completePendingFlowAsCurrentUser)
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [message, setMessage] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  // Captured once at mount, same pattern as SignUpScreen's on-mount flags —
+  // SignUpScreen sends a returning (not-previously-signed-in) supporter
+  // back here with this flag once their growth feedback is actually saved.
+  const [showThanksOnMount] = useState(() =>
+    Boolean((location.state as { growthFeedbackThanks?: boolean } | null)?.growthFeedbackThanks),
+  )
+  const [bannerVisible, setBannerVisible] = useState(showThanksOnMount)
 
-  // The crowdfund option is itself the submit action — it carries straight
-  // into the email-capture flow nomination/vote use (SignUpScreen), so
-  // there's someone real to follow up with in the CRM. The other two
-  // options need a bit more detail first, so tapping them just opens their
-  // own prompt below instead of submitting right away.
+  const alreadySignedIn = currentUser !== null && currentUser.verified
+
+  // A supporter who's already signed in has already given their email —
+  // submit straight away and show the banner here, no screen to visit.
+  // Someone not yet signed in still needs to give an email first, so that
+  // goes through the usual email-capture flow (SignUpScreen); it sends
+  // them back here with showThanksOnMount once done.
+  async function submitNow(options: string[], note?: string) {
+    beginGrowthFeedback(options, note)
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      await completePendingFlowAsCurrentUser()
+      logEvent('growth_feedback_submit', location.pathname)
+      setSelectedOption(null)
+      setMessage('')
+      setBannerVisible(true)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   function handleOption(option: string) {
     if (option === GROWTH_OPTION_CROWDFUND) {
-      beginGrowthFeedback([option], undefined)
-      navigate('/spot/signup')
+      if (alreadySignedIn) {
+        void submitNow([option])
+      } else {
+        beginGrowthFeedback([option], undefined)
+        navigate('/spot/signup')
+      }
       return
     }
     setSelectedOption((current) => (current === option ? null : option))
     setMessage('')
+    setSubmitError(null)
   }
 
   function handleSubmitFollowUp() {
     if (!selectedOption) return
-    beginGrowthFeedback([selectedOption], message.trim() || undefined)
-    navigate('/spot/signup')
+    if (alreadySignedIn) {
+      void submitNow([selectedOption], message.trim() || undefined)
+    } else {
+      beginGrowthFeedback([selectedOption], message.trim() || undefined)
+      navigate('/spot/signup')
+    }
   }
 
   const followUp = selectedOption ? FOLLOW_UP_PROMPT[selectedOption] : null
@@ -90,8 +132,9 @@ export function SupportScreen() {
               <button
                 key={option}
                 type="button"
+                disabled={submitting}
                 onClick={() => handleOption(option)}
-                className={`rounded-lg border px-3 py-2 text-left text-sm font-medium active:bg-slate-50 ${
+                className={`rounded-lg border px-3 py-2 text-left text-sm font-medium active:bg-slate-50 disabled:opacity-40 ${
                   selectedOption === option
                     ? 'border-brand-600 bg-brand-50 text-brand-800'
                     : 'border-slate-200 bg-white text-slate-700'
@@ -114,18 +157,24 @@ export function SupportScreen() {
               />
               <button
                 type="button"
-                disabled={message.trim() === ''}
+                disabled={message.trim() === '' || submitting}
                 onClick={handleSubmitFollowUp}
                 className="mt-2 w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
               >
-                Submit
+                {submitting ? 'Submitting…' : 'Submit'}
               </button>
             </div>
           )}
 
-          <p className="mt-3 text-xs text-slate-500">
-            We'll ask for your email so we can get back to you.
-          </p>
+          {submitError && (
+            <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{submitError}</p>
+          )}
+
+          {!alreadySignedIn && (
+            <p className="mt-3 text-xs text-slate-500">
+              We'll ask for your email so we can get back to you.
+            </p>
+          )}
         </div>
 
         <button
@@ -136,6 +185,10 @@ export function SupportScreen() {
           Back to map
         </button>
       </div>
+
+      {bannerVisible && (
+        <ThanksBanner message="Thanks for letting us know." onDone={() => setBannerVisible(false)} />
+      )}
     </div>
   )
 }

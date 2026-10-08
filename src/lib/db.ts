@@ -284,6 +284,18 @@ export async function insertLandownerLead(
   if (error) throw error
 }
 
+/**
+ * Shown wherever a duplicate-vote failure can surface (this function's own
+ * unique-constraint catch below, and the equivalent client-side check
+ * local-only mode runs itself, see useAppStore's finalizePendingFlow/
+ * completePendingFlowAsCurrentUser) — the votes table's
+ * unique(user_id, nomination_id) constraint (0001_init.sql) is deliberate,
+ * by design, not a bug, so the message says so rather than reading like a
+ * generic failure.
+ */
+export const DUPLICATE_VOTE_MESSAGE =
+  "Looks like you've already voted for this stop. To keep the data reliable, we only count one vote per stop for each person."
+
 export async function insertVote(input: {
   userId: string
   nominationId: string
@@ -294,7 +306,10 @@ export async function insertVote(input: {
     .insert({ user_id: input.userId, nomination_id: input.nominationId, pay_band: input.payBand })
     .select('id')
     .single()
-  if (error) throw error
+  if (error) {
+    if (error.code === '23505') throw new Error(DUPLICATE_VOTE_MESSAGE)
+    throw error
+  }
   return (data as { id: string }).id
 }
 
