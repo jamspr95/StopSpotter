@@ -133,12 +133,12 @@ export function AdminReportsScreen() {
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm">
-        <div>
+        <div className="w-full sm:w-auto">
           <label className="block text-xs font-medium text-slate-500">Council area</label>
           <select
             value={councilFilter}
             onChange={(e) => setCouncilFilter(e.target.value)}
-            className="mt-1 rounded-lg border border-slate-200 p-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm sm:w-auto"
           >
             <option value="all">All areas</option>
             {councilAreas.map((c) => (
@@ -153,7 +153,7 @@ export function AdminReportsScreen() {
           type="button"
           disabled={loading || rows.length === 0}
           onClick={handleCsv}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40"
+          className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40 sm:flex-none"
         >
           Download CSV
         </button>
@@ -161,7 +161,7 @@ export function AdminReportsScreen() {
           type="button"
           disabled={loading || rows.length === 0}
           onClick={() => void handlePdf()}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:flex-none"
         >
           Download PDF
         </button>
@@ -187,31 +187,53 @@ export function AdminReportsScreen() {
       )}
 
       {!analyticsError && (
-        <table className="mt-4 w-full overflow-hidden rounded-xl bg-white text-sm shadow-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
-              <th className="p-3">Event</th>
-              <th className="p-3">Campaign</th>
-              <th className="p-3">Count</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analytics.map((row) => (
-              <tr key={`${row.eventType}-${row.campaign ?? 'none'}`} className="border-b border-slate-100 last:border-0">
-                <td className="p-3 text-slate-800">{EVENT_LABEL[row.eventType] ?? row.eventType}</td>
-                <td className="p-3 text-slate-600">{row.campaign ?? '— (no campaign tag)'}</td>
-                <td className="p-3 text-slate-600">{row.eventCount}</td>
+        <>
+          <table className="mt-4 hidden w-full overflow-hidden rounded-xl bg-white text-sm shadow-sm md:table">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+                <th className="p-3">Event</th>
+                <th className="p-3">Campaign</th>
+                <th className="p-3">Count</th>
               </tr>
+            </thead>
+            <tbody>
+              {analytics.map((row) => (
+                <tr key={`${row.eventType}-${row.campaign ?? 'none'}`} className="border-b border-slate-100 last:border-0">
+                  <td className="p-3 text-slate-800">{EVENT_LABEL[row.eventType] ?? row.eventType}</td>
+                  <td className="p-3 text-slate-600">{row.campaign ?? '— (no campaign tag)'}</td>
+                  <td className="p-3 text-slate-600">{row.eventCount}</td>
+                </tr>
+              ))}
+              {analytics.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="p-6 text-center text-slate-400">
+                    No events logged yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <ul className="mt-4 flex flex-col gap-2 md:hidden">
+            {analytics.map((row) => (
+              <li
+                key={`${row.eventType}-${row.campaign ?? 'none'}`}
+                className="flex items-center justify-between rounded-xl bg-white p-3 text-sm shadow-sm"
+              >
+                <div>
+                  <p className="font-medium text-slate-800">{EVENT_LABEL[row.eventType] ?? row.eventType}</p>
+                  <p className="text-xs text-slate-500">{row.campaign ?? '— (no campaign tag)'}</p>
+                </div>
+                <span className="font-semibold text-slate-700">{row.eventCount}</span>
+              </li>
             ))}
             {analytics.length === 0 && (
-              <tr>
-                <td colSpan={3} className="p-6 text-center text-slate-400">
-                  No events logged yet.
-                </td>
-              </tr>
+              <li className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 shadow-sm">
+                No events logged yet.
+              </li>
             )}
-          </tbody>
-        </table>
+          </ul>
+        </>
       )}
     </div>
   )

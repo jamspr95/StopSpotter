@@ -77,7 +77,7 @@ export function AdminStopDetailScreen() {
         ← Back to stops
       </button>
 
-      <div className="mt-3 flex items-start justify-between">
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="font-display text-xl font-semibold capitalize text-slate-900">
             {nomination.answers.placeType.replace('_', ' ')}

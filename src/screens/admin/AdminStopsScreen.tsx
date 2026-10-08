@@ -57,12 +57,12 @@ export function AdminStopsScreen() {
       <p className="mt-1 text-sm text-slate-500">{filtered.length} of {nominations.length} stops</p>
 
       <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm">
-        <div>
+        <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">
           <label className="block text-xs font-medium text-slate-500">Council area</label>
           <select
             value={councilFilter}
             onChange={(e) => setCouncilFilter(e.target.value)}
-            className="mt-1 rounded-lg border border-slate-200 p-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm"
           >
             <option value="all">All</option>
             {councilAreas.map((c) => (
@@ -73,12 +73,12 @@ export function AdminStopsScreen() {
           </select>
         </div>
 
-        <div>
+        <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">
           <label className="block text-xs font-medium text-slate-500">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as NominationStatus | 'all')}
-            className="mt-1 rounded-lg border border-slate-200 p-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm"
           >
             <option value="all">All</option>
             {STATUS_ORDER.map((s) => (
@@ -89,17 +89,17 @@ export function AdminStopsScreen() {
           </select>
         </div>
 
-        <div>
+        <div className="min-w-[45%] flex-1 sm:min-w-[100px] sm:flex-none">
           <label className="block text-xs font-medium text-slate-500">Min score</label>
           <input
             type="number"
             value={minScore}
             onChange={(e) => setMinScore(e.target.value)}
-            className="mt-1 w-20 rounded-lg border border-slate-200 p-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm sm:w-20"
           />
         </div>
 
-        <label className="flex items-center gap-2 pb-2 text-sm text-slate-700">
+        <label className="flex min-w-[45%] flex-1 items-center gap-2 pb-2 text-sm text-slate-700 sm:flex-none">
           <input
             type="checkbox"
             checked={flaggedOnly}
@@ -109,12 +109,12 @@ export function AdminStopsScreen() {
           Flagged only
         </label>
 
-        <div>
+        <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">
           <label className="block text-xs font-medium text-slate-500">Sort by</label>
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="mt-1 rounded-lg border border-slate-200 p-2 text-sm"
+            className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm"
           >
             <option value="created_desc">Newest first</option>
             <option value="votes_desc">Most votes</option>
@@ -127,51 +127,93 @@ export function AdminStopsScreen() {
       {loading && <p className="mt-4 text-sm text-slate-500">Loading…</p>}
 
       {!loading && (
-        <table className="mt-4 w-full overflow-hidden rounded-xl bg-white text-sm shadow-sm">
-          <thead>
-            <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
-              <th className="p-3">Created</th>
-              <th className="p-3">Place</th>
-              <th className="p-3">Council area</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Score</th>
-              <th className="p-3">Flags</th>
-              <th className="p-3">Votes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((n) => (
-              <tr
-                key={n.id}
-                onClick={() => navigate(`/admin/stop/${n.id}`)}
-                className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
-              >
-                <td className="p-3 text-slate-500">
-                  {new Date(n.createdAt).toLocaleDateString()}
-                </td>
-                <td className="p-3 capitalize text-slate-800">
-                  {n.answers.placeType.replace('_', ' ')}
-                </td>
-                <td className="p-3 text-slate-600">{n.councilArea ?? '—'}</td>
-                <td className="p-3">
-                  <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
-                    {STATUS_LABEL[n.status]}
-                  </span>
-                </td>
-                <td className="p-3 text-slate-600">{n.criteria.score}</td>
-                <td className="p-3 text-slate-600">{n.criteria.flags.length || '—'}</td>
-                <td className="p-3 text-slate-600">{n.voteCount}</td>
+        <>
+          {/* Desktop/tablet: a table. Phone: the same rows as cards —
+              a table's columns just don't fit a phone width, and squeezing
+              it in with horizontal scroll hides data rather than showing it. */}
+          <table className="mt-4 hidden w-full overflow-hidden rounded-xl bg-white text-sm shadow-sm md:table">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
+                <th className="p-3">Created</th>
+                <th className="p-3">Place</th>
+                <th className="p-3">Council area</th>
+                <th className="p-3">Status</th>
+                <th className="p-3">Score</th>
+                <th className="p-3">Flags</th>
+                <th className="p-3">Votes</th>
               </tr>
+            </thead>
+            <tbody>
+              {filtered.map((n) => (
+                <tr
+                  key={n.id}
+                  onClick={() => navigate(`/admin/stop/${n.id}`)}
+                  className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                >
+                  <td className="p-3 text-slate-500">
+                    {new Date(n.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="p-3 capitalize text-slate-800">
+                    {n.answers.placeType.replace('_', ' ')}
+                  </td>
+                  <td className="p-3 text-slate-600">{n.councilArea ?? '—'}</td>
+                  <td className="p-3">
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      {STATUS_LABEL[n.status]}
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-600">{n.criteria.score}</td>
+                  <td className="p-3 text-slate-600">{n.criteria.flags.length || '—'}</td>
+                  <td className="p-3 text-slate-600">{n.voteCount}</td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-slate-400">
+                    No stops match these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <ul className="mt-4 flex flex-col gap-2 md:hidden">
+            {filtered.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/admin/stop/${n.id}`)}
+                  className="w-full rounded-xl bg-white p-4 text-left shadow-sm active:bg-slate-50"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-medium capitalize text-slate-800">
+                      {n.answers.placeType.replace('_', ' ')}
+                    </span>
+                    <span className="flex-shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      {STATUS_LABEL[n.status]}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">{n.councilArea ?? '—'}</p>
+                  <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
+                    <span>{new Date(n.createdAt).toLocaleDateString()}</span>
+                    <span>Score {n.criteria.score}</span>
+                    {n.criteria.flags.length > 0 && (
+                      <span className="text-amber-700">{n.criteria.flags.length} flagged</span>
+                    )}
+                    <span>
+                      {n.voteCount} {n.voteCount === 1 ? 'vote' : 'votes'}
+                    </span>
+                  </div>
+                </button>
+              </li>
             ))}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="p-6 text-center text-slate-400">
-                  No stops match these filters.
-                </td>
-              </tr>
+              <li className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 shadow-sm">
+                No stops match these filters.
+              </li>
             )}
-          </tbody>
-        </table>
+          </ul>
+        </>
       )}
     </div>
   )

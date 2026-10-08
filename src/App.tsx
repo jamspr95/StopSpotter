@@ -5,6 +5,7 @@ import { AdminLayout } from './screens/admin/AdminLayout'
 import { AdminLoginScreen } from './screens/admin/AdminLoginScreen'
 import { AdminModerationScreen } from './screens/admin/AdminModerationScreen'
 import { AdminReportsScreen } from './screens/admin/AdminReportsScreen'
+import { AdminReviewScreen } from './screens/admin/AdminReviewScreen'
 import { AdminStopDetailScreen } from './screens/admin/AdminStopDetailScreen'
 import { AdminStopsScreen } from './screens/admin/AdminStopsScreen'
 import { DoneShareScreen } from './screens/DoneShareScreen'
@@ -44,6 +45,7 @@ export function App() {
         <Route path="/admin/login" element={<AdminLoginScreen />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminStopsScreen />} />
+          <Route path="review" element={<AdminReviewScreen />} />
           <Route path="stop/:id" element={<AdminStopDetailScreen />} />
           <Route path="moderation" element={<AdminModerationScreen />} />
           <Route path="reports" element={<AdminReportsScreen />} />

@@ -51,7 +51,7 @@ export function AdminModerationScreen() {
         <ul className="mt-4 flex flex-col gap-3">
           {reports.map((r) => (
             <li key={r.id} className="rounded-xl bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-800">{r.reason}</p>
                   <p className="mt-1 text-xs text-slate-500">
@@ -62,7 +62,7 @@ export function AdminModerationScreen() {
                     <p className="mt-2 text-sm italic text-slate-600">"{r.nominationWhyHere}"</p>
                   )}
                 </div>
-                <div className="flex flex-shrink-0 flex-col items-end gap-2">
+                <div className="flex flex-shrink-0 items-center gap-2 sm:flex-col sm:items-end">
                   {r.resolved && (
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                       Resolved
