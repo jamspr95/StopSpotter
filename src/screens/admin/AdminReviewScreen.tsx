@@ -65,6 +65,10 @@ export function AdminReviewScreen() {
   const [lastAction, setLastAction] = useState<{ id: string; previousStatus: NominationStatus; label: string } | null>(null)
   const [dragX, setDragX] = useState(0)
   const [dragging, setDragging] = useState(false)
+  // Holds the id of the card it's open for, not a plain boolean — so
+  // moving to the next card closes it automatically (derived, not reset
+  // via an effect) instead of carrying the previous card's open state over.
+  const [otherSitesOpenFor, setOtherSitesOpenFor] = useState<string | null>(null)
   const pointerActive = useRef(false)
   const dragStartX = useRef(0)
 
@@ -79,6 +83,17 @@ export function AdminReviewScreen() {
   const top = displayQueue[0]
   const second = displayQueue[1]
   const third = displayQueue[2]
+
+  // Other nominations from the same submitter — "a reliable spotter or a
+  // one-off" at a glance (design spec). Only meaningful for a claimed
+  // submitter: an anonymous/deleted-account userId is null, which would
+  // otherwise match every other anonymous/deleted nomination, not just
+  // this one person's.
+  const otherSubmissions = useMemo(() => {
+    if (!top?.userId) return []
+    return nominations.filter((n) => n.userId === top.userId && n.id !== top.id)
+  }, [nominations, top])
+  const showOtherSites = top !== undefined && otherSitesOpenFor === top.id
 
   async function commit(action: Action) {
     if (!top || flyingOut) return
@@ -253,12 +268,57 @@ export function AdminReviewScreen() {
                   />
                 </div>
 
+                <div className="mt-3 rounded-lg bg-slate-50 p-2.5 text-xs">
+                  <p className="font-medium uppercase tracking-wide text-slate-400">Submitter</p>
+                  <p className="mt-1 text-slate-700">
+                    {!top.submitterWasClaimed
+                      ? 'Anonymous'
+                      : !top.submitterEmail
+                        ? 'Account deleted'
+                        : top.submitterFirstName
+                          ? `${top.submitterFirstName} · ${top.submitterEmail}`
+                          : top.submitterEmail}
+                  </p>
+                  {otherSubmissions.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => setOtherSitesOpenFor(showOtherSites ? null : top.id)}
+                        className="mt-1 font-medium text-brand-700 underline"
+                      >
+                        {otherSubmissions.length} other {otherSubmissions.length === 1 ? 'site' : 'sites'} from this submitter
+                      </button>
+                      {showOtherSites && (
+                        <ul className="mt-1.5 flex flex-col gap-1">
+                          {otherSubmissions.map((n) => (
+                            <li key={n.id}>
+                              <button
+                                type="button"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={() => navigate(`/admin/stop/${n.id}`)}
+                                className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left hover:bg-white"
+                              >
+                                <span className="capitalize text-slate-600">
+                                  {n.answers.placeType.replace('_', ' ')}
+                                </span>
+                                <span className="font-medium text-brand-700">{STATUS_LABEL[n.status]}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+
                 <div className="mt-auto flex items-center justify-between pt-3 text-xs text-slate-400">
                   <span>
                     {top.voteCount} {top.voteCount === 1 ? 'vote' : 'votes'} · {top.payBand.replace(/_/g, ' ')}
                   </span>
                   <button
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => navigate(`/admin/stop/${top.id}`)}
                     className="font-medium text-brand-700 underline"
                   >

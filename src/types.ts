@@ -111,6 +111,11 @@ export interface AdminNomination {
   source: 'user' | 'site_finder' | 'both'
   createdAt: string
   voteCount: number
+  /** Live email/first name off the submitter's account, null once it's never been claimed or the account's gone. */
+  submitterEmail: string | null
+  submitterFirstName: string | null
+  /** True once this nomination was ever attached to a signed-in user — distinguishes "never had one" (false) from "had one, account since deleted" (true, submitterEmail null). */
+  submitterWasClaimed: boolean
 }
 
 export interface AdminLandownerLead {

@@ -508,6 +508,9 @@ interface AdminNominationRow {
   source: 'user' | 'site_finder' | 'both'
   created_at: string
   vote_count: number
+  submitter_email: string | null
+  submitter_first_name: string | null
+  submitter_was_claimed: boolean
 }
 
 export async function adminListNominations(): Promise<AdminNomination[]> {
@@ -538,6 +541,9 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     source: row.source,
     createdAt: row.created_at,
     voteCount: row.vote_count,
+    submitterEmail: row.submitter_email,
+    submitterFirstName: row.submitter_first_name,
+    submitterWasClaimed: row.submitter_was_claimed,
   }))
 }
 
