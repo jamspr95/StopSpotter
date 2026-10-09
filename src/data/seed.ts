@@ -5,6 +5,16 @@ import type { Nomination, NominationAnswers, PayBand, Vote } from '../types'
 /** Rough centre for demo purposes only — not a real AireStop target area. */
 export const MAP_CENTRE = { lat: 52.486, lng: -1.8904 }
 
+/**
+ * Where the map first opens — the whole of the UK, not zoomed into
+ * MAP_CENTRE's city. MAP_CENTRE itself stays as the fallback for
+ * DropPinScreen (which needs a real, named-city-level starting point for
+ * dropping a pin, not a UK-wide view) and for scattering the demo seed
+ * data, so it's left alone rather than widened to match.
+ */
+export const UK_OVERVIEW_CENTRE = { lat: 54.5, lng: -4 }
+export const UK_OVERVIEW_ZOOM = 5
+
 function makeAnswers(partial: Partial<NominationAnswers>): NominationAnswers {
   return {
     placeType: 'grass_field',

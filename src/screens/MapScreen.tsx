@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Circle, MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
-import { MAP_CENTRE, SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED } from '../data/seed'
+import { SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED, UK_OVERVIEW_CENTRE, UK_OVERVIEW_ZOOM } from '../data/seed'
 import { PUBLIC_FUZZ_RADIUS_M } from '../lib/geo'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
@@ -11,7 +11,8 @@ import type { LatLng } from '../types'
 /**
  * Tracks the map's current viewport in a ref (not state — nobody needs a
  * re-render on every pan) so "Spot a stop" can hand DropPinScreen the spot
- * someone was actually looking at, instead of always reopening at MAP_CENTRE.
+ * someone was actually looking at, instead of always reopening at the UK
+ * overview.
  */
 function ViewportTracker({ onMove }: { onMove: (centre: LatLng, zoom: number) => void }) {
   useMapEvents({
@@ -31,7 +32,10 @@ export function MapScreen() {
   const backendReady = useAppStore((s) => s.backendReady)
   const [satellite, setSatellite] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
-  const viewRef = useRef<{ centre: LatLng; zoom: number }>({ centre: MAP_CENTRE, zoom: 12 })
+  const viewRef = useRef<{ centre: LatLng; zoom: number }>({
+    centre: UK_OVERVIEW_CENTRE,
+    zoom: UK_OVERVIEW_ZOOM,
+  })
 
   const totalSpotted = useMemo(() => {
     // Real-backend mode: nominations.length is already the genuine DB count
@@ -47,8 +51,8 @@ export function MapScreen() {
   return (
     <div className="relative h-dvh">
       <MapContainer
-        center={MAP_CENTRE}
-        zoom={12}
+        center={UK_OVERVIEW_CENTRE}
+        zoom={UK_OVERVIEW_ZOOM}
         // z-0 contains Leaflet's internal panes/controls (they go up to z-index:1000)
         // in their own stacking context, so the overlay buttons below — on z-10 —
         // reliably paint above the whole map instead of being outranked by it.
