@@ -35,6 +35,15 @@ export function AdminStopDetailScreen() {
 
   const nomination = nominations.find((n) => n.id === id)
 
+  // Same "a reliable spotter or a one-off" context as the review card
+  // (AdminReviewScreen), shown here in full rather than collapsed — only
+  // meaningful for a claimed submitter, since an anonymous/deleted-account
+  // userId is null and would otherwise match every other anonymous/
+  // deleted nomination, not just this one person's.
+  const otherSubmissions = nomination?.userId
+    ? nominations.filter((n) => n.userId === nomination.userId && n.id !== nomination.id)
+    : []
+
   useEffect(() => {
     if (!id) return
     void db.adminListLandownerLeads(id).then(setLeads).catch(() => setLeads([]))
@@ -137,6 +146,55 @@ export function AdminStopDetailScreen() {
           "{nomination.whyHere}"
         </div>
       )}
+
+      <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-700">Submitter</h3>
+        {!nomination.submitterWasClaimed ? (
+          <p className="mt-2 text-sm text-slate-700">Anonymous</p>
+        ) : !nomination.submitterEmail ? (
+          <p className="mt-2 text-sm text-slate-700">Account deleted</p>
+        ) : (
+          <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
+            <div>
+              <p className="text-xs font-medium text-slate-500">Email</p>
+              <p className="mt-0.5 text-slate-700">{nomination.submitterEmail}</p>
+            </div>
+            <Field label="First name" value={nomination.submitterFirstName || '—'} />
+          </div>
+        )}
+
+        {otherSubmissions.length > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="text-xs font-medium text-slate-500">
+              {otherSubmissions.length} other {otherSubmissions.length === 1 ? 'site' : 'sites'} from this
+              submitter
+            </p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {otherSubmissions.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/stop/${n.id}`)}
+                    className="flex w-full items-center justify-between rounded-lg bg-slate-50 p-3 text-sm active:bg-slate-100"
+                  >
+                    <span>
+                      <span className="font-medium capitalize text-slate-800">
+                        {n.answers.placeType.replace('_', ' ')}
+                      </span>
+                      <span className="ml-2 text-xs text-slate-400">
+                        {new Date(n.createdAt).toLocaleDateString()}
+                      </span>
+                    </span>
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      {STATUS_LABEL[n.status]}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {leads.length > 0 && (
         <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
