@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { SiteExplorer } from '../../components/SiteExplorer'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL } from '../../lib/labels'
+import { satelliteImageUrl } from '../../lib/satelliteImage'
 import { useAdminStore } from '../../store/useAdminStore'
 import type { AdminNomination, NominationStatus } from '../../types'
 
@@ -20,14 +22,6 @@ const ACTION_DIRECTION: Record<Action, Direction> = {
   not_suitable: 'left',
   under_review: 'up',
   shortlist: 'right',
-}
-
-const PLACE_ICON: Record<string, string> = {
-  unused_land: '🌾',
-  grass_field: '🌳',
-  lay_by: '🛣️',
-  car_park: '🅿️',
-  other: '📍',
 }
 
 /**
@@ -69,6 +63,9 @@ export function AdminReviewScreen() {
   // moving to the next card closes it automatically (derived, not reset
   // via an effect) instead of carrying the previous card's open state over.
   const [otherSitesOpenFor, setOtherSitesOpenFor] = useState<string | null>(null)
+  // Same "holds the id, not a boolean" reasoning as otherSitesOpenFor —
+  // moving to the next card should close this too, not carry it over.
+  const [exploreOpenFor, setExploreOpenFor] = useState<string | null>(null)
   const pointerActive = useRef(false)
   const dragStartX = useRef(0)
 
@@ -94,6 +91,7 @@ export function AdminReviewScreen() {
     return nominations.filter((n) => n.userId === top.userId && n.id !== top.id)
   }, [nominations, top])
   const showOtherSites = top !== undefined && otherSitesOpenFor === top.id
+  const showExplore = top !== undefined && exploreOpenFor === top.id
 
   async function commit(action: Action) {
     if (!top || flyingOut) return
@@ -225,11 +223,21 @@ export function AdminReviewScreen() {
                 </div>
               )}
 
-              <div className="flex h-36 flex-shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-brand-800">
-                <span className="text-6xl">
-                  {(top.answers.placeType ? PLACE_ICON[top.answers.placeType] : null) ?? PLACE_ICON.other}
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setExploreOpenFor(showExplore ? null : top.id)}
+                className="relative block h-36 w-full flex-shrink-0 overflow-hidden bg-slate-200"
+              >
+                <img
+                  src={satelliteImageUrl(top.exact, 'wide')}
+                  alt="Satellite view of the site"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white">
+                  {showExplore ? 'Hide explore ▲' : 'Explore ▾'}
                 </span>
-              </div>
+              </button>
 
               <div className="flex h-[calc(100%-9rem)] flex-col overflow-y-auto p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -251,6 +259,12 @@ export function AdminReviewScreen() {
                 <p className="text-sm text-slate-500">
                   {top.areaLabel ? `Near ${top.areaLabel}` : (top.councilArea ?? 'Area unknown')}
                 </p>
+
+                {showExplore && (
+                  <div className="mt-3">
+                    <SiteExplorer point={top.exact} compact />
+                  </div>
+                )}
 
                 {top.criteria.flags.length > 0 && (
                   <ul className="mt-2 flex flex-wrap gap-1">

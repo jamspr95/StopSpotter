@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MapContainer, Marker } from 'react-leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
+import { SiteExplorer } from '../../components/SiteExplorer'
 import * as db from '../../lib/db'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
@@ -109,6 +110,13 @@ export function AdminStopDetailScreen() {
           <div className="absolute left-3 top-3 z-10">
             <SatelliteToggle satellite={satellite} onChange={setSatellite} />
           </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-700">Explore</h3>
+        <div className="mt-2">
+          <SiteExplorer point={nomination.exact} />
         </div>
       </div>
 

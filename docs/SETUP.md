@@ -461,3 +461,51 @@ To import a batch of SiteFinder candidates:
    map, with the distinct "Suggested by AireStop" marker — an
    under-review candidate is never shown to the public, matching
    `docs/PROJECT_PLAN.md`'s "released in small batches per area".
+
+## 13. Sharper satellite imagery + Street View on admin screens (optional)
+
+The swipe-review queue (`/admin/review`) and the full stop-detail screen
+(`/admin/stop/:id`) both have an "Explore" satellite image + Street View
+panel (`src/components/SiteExplorer.tsx`). With nothing configured, this
+already works using the same free Esri imagery the public map uses — no
+setup needed. Adding a Google Maps API key sharpens the satellite image
+(Esri's free layer has genuinely low resolution over a lot of rural GB)
+and turns on Street View, which has no free equivalent at all.
+
+**Cost, so you can decide if it's worth it:** the Street View embed itself
+is free and unlimited (Google's Maps Embed API has no per-load charge,
+confirmed on Google's own pricing page). The sharper satellite image uses
+the Maps Static API instead, which is pay-as-you-go at roughly $2 per
+1,000 image loads. This is an admin-only screen, not the public app, so
+at realistic review volumes that's pennies a month — but it is a real,
+metered cost against your own Google Cloud billing, not a flat free tier.
+(We looked at Ordnance Survey's aerial imagery as a UK-specific
+alternative first — it turned out to be priced per tile/location, roughly
+£28-36+VAT per small section, which scales with how many stops you have
+rather than how often you look at them, so it's a poor fit here.)
+
+1. **Create a Google Cloud project** (or use an existing one) at
+   [console.cloud.google.com](https://console.cloud.google.com), and
+   confirm it has a billing account attached — Google requires this to
+   issue any Maps Platform key, even for the free Embed API.
+2. **APIs & Services → Library** — enable **Maps Embed API** (for Street
+   View) and **Maps Static API** (for the sharper satellite image). Skip
+   the Static one if you only want Street View and are happy keeping the
+   free Esri image.
+3. **APIs & Services → Credentials → Create credentials → API key.**
+4. **Restrict the key before using it anywhere.** Click into the new key,
+   under **Application restrictions** choose **HTTP referrers**, and add
+   your deployed domain (`https://jamspr95.github.io/StopSpotter/*`) and
+   `http://localhost:*` for local dev. This matters more than it would for
+   the Supabase anon key: `VITE_`-prefixed variables ship inside the
+   client bundle, so this key **will** be readable by anyone who opens
+   the site's dev tools. An unrestricted key is a billing-abuse risk
+   (someone else running up charges on your account), not just an exposed
+   secret — the referrer restriction is what actually protects you, not
+   keeping the key "hidden" (it can't be).
+5. Add it as `VITE_GOOGLE_MAPS_API_KEY` in `.env.local` for local dev, and
+   as a GitHub Actions repo secret for the deployed build (same two-place
+   pattern as `VITE_SUPABASE_URL` in §4 above).
+
+Nothing breaks by skipping this — both admin screens keep working on the
+free Esri image, just without Street View, same as today.
