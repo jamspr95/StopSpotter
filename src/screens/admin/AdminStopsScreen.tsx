@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
+import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
+import { computePriorityScore } from '../../lib/priority'
 import { useAdminStore } from '../../store/useAdminStore'
 import type { NominationStatus } from '../../types'
 
-type SortKey = 'created_desc' | 'votes_desc' | 'score_desc'
+type SortKey = 'created_desc' | 'votes_desc' | 'score_desc' | 'priority_desc'
 
 export function AdminStopsScreen() {
   const navigate = useNavigate()
@@ -44,6 +45,8 @@ export function AdminStopsScreen() {
           return b.voteCount - a.voteCount
         case 'score_desc':
           return b.criteria.score - a.criteria.score
+        case 'priority_desc':
+          return computePriorityScore(b) - computePriorityScore(a)
         default:
           return b.createdAt.localeCompare(a.createdAt)
       }
@@ -119,6 +122,7 @@ export function AdminStopsScreen() {
             <option value="created_desc">Newest first</option>
             <option value="votes_desc">Most votes</option>
             <option value="score_desc">Highest score</option>
+            <option value="priority_desc">Priority (fit + demand + ownership)</option>
           </select>
         </div>
       </div>
@@ -136,6 +140,7 @@ export function AdminStopsScreen() {
               <tr className="border-b border-slate-200 text-left text-xs font-semibold text-slate-500">
                 <th className="p-3">Created</th>
                 <th className="p-3">Place</th>
+                <th className="p-3">Source</th>
                 <th className="p-3">Council area</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Score</th>
@@ -154,8 +159,9 @@ export function AdminStopsScreen() {
                     {new Date(n.createdAt).toLocaleDateString()}
                   </td>
                   <td className="p-3 capitalize text-slate-800">
-                    {n.answers.placeType.replace('_', ' ')}
+                    {formatEnumLabel(n.answers.placeType, 'Potential stop')}
                   </td>
+                  <td className="p-3 text-slate-600">{SOURCE_LABEL[n.source]}</td>
                   <td className="p-3 text-slate-600">{n.councilArea ?? '—'}</td>
                   <td className="p-3">
                     <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
@@ -169,7 +175,7 @@ export function AdminStopsScreen() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-slate-400">
+                  <td colSpan={8} className="p-6 text-center text-slate-400">
                     No stops match these filters.
                   </td>
                 </tr>
@@ -187,12 +193,17 @@ export function AdminStopsScreen() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium capitalize text-slate-800">
-                      {n.answers.placeType.replace('_', ' ')}
+                      {formatEnumLabel(n.answers.placeType, 'Potential stop')}
                     </span>
                     <span className="flex-shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
                       {STATUS_LABEL[n.status]}
                     </span>
                   </div>
+                  {n.source !== 'user' && (
+                    <span className="mt-1 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      {SOURCE_LABEL[n.source]}
+                    </span>
+                  )}
                   <p className="mt-1 text-sm text-slate-500">{n.councilArea ?? '—'}</p>
                   <div className="mt-2 flex items-center gap-3 text-xs text-slate-500">
                     <span>{new Date(n.createdAt).toLocaleDateString()}</span>

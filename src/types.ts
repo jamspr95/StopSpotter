@@ -22,15 +22,24 @@ export interface LatLng {
   lng: number
 }
 
-/** Answers 1-7 captured on the nomination form; question 8 is demand, stored separately. */
+/**
+ * Answers 1-7 captured on the nomination form; question 8 is demand, stored
+ * separately. placeType/nearestHouse/slope/water are nullable because a
+ * source='site_finder' nomination (supabase/migrations/0013_site_finder_integration.sql)
+ * has no honest answer to any of them — SiteFinder's pipeline never asks
+ * "would you stay here?" or measures distance to the nearest house as a
+ * category. A source='user' row always has every one of these filled in
+ * (enforced by that migration's check constraint), so this is only ever
+ * null on a nomination StopSpotter itself didn't collect.
+ */
 export interface NominationAnswers {
-  placeType: 'unused_land' | 'grass_field' | 'lay_by' | 'car_park' | 'other'
+  placeType: 'unused_land' | 'grass_field' | 'lay_by' | 'car_park' | 'other' | null
   ownerType: OwnerType
-  nearestHouse: 'under_20m' | '20_50m' | 'over_50m' | 'not_sure'
-  slope: 'flat' | 'gentle_slope' | 'steep'
+  nearestHouse: 'under_20m' | '20_50m' | 'over_50m' | 'not_sure' | null
+  slope: 'flat' | 'gentle_slope' | 'steep' | null
   roomForFive: 'yes' | 'not_sure' | 'no'
   nearby: Array<'pub' | 'shop' | 'town_centre' | 'attraction' | 'beach_or_trail' | 'none'>
-  water: 'toilet_block' | 'water_tap' | 'both' | 'dont_know'
+  water: 'toilet_block' | 'water_tap' | 'both' | 'dont_know' | null
 }
 
 export interface LandownerFollowUp {
@@ -55,7 +64,8 @@ export interface Nomination {
   areaLabel: string | null
   answers: NominationAnswers
   whyHere?: string
-  payBand: PayBand
+  /** Null for a source='site_finder' row — no willingness-to-pay signal exists without a human nominator. */
+  payBand: PayBand | null
   criteria: CriteriaResult
   ownershipHint: string
   landowner?: LandownerFollowUp
@@ -103,7 +113,7 @@ export interface AdminNomination {
   areaLabel: string | null
   answers: NominationAnswers
   whyHere?: string
-  payBand: PayBand
+  payBand: PayBand | null
   criteria: CriteriaResult
   ownershipHint: string
   status: NominationStatus
@@ -116,6 +126,22 @@ export interface AdminNomination {
   submitterFirstName: string | null
   /** True once this nomination was ever attached to a signed-in user — distinguishes "never had one" (false) from "had one, account since deleted" (true, submitterEmail null). */
   submitterWasClaimed: boolean
+  // ── SiteFinder detail (supabase/migrations/0013_site_finder_integration.sql) ──
+  // Admin-only, same as exact location/owner_type above — withheld from
+  // anon/authenticated by the same column-grant pattern in that migration.
+  // Null on a pure source='user' row; populated (to whatever extent
+  // SiteFinder's own pipeline run produced) on 'site_finder' or 'both'.
+  /** SiteFinder's own 0-1 score (config/scoring.yaml in the SiteFinder repo) — NOT comparable to criteria.score, see src/lib/priority.ts for how the two get combined. */
+  siteFinderScore: number | null
+  siteFinderComponentScores: Record<string, number> | null
+  siteFinderFlags: string[]
+  usableAreaM2: number | null
+  capacityPitches: number | null
+  avgSlopePercent: number | null
+  slopeSource: string | null
+  roadAccess: 'good' | 'fair' | 'poor' | 'unknown' | null
+  ownershipConfidenceDetail: 'high' | 'medium' | 'low' | 'unknown' | null
+  coastDistanceM: number | null
 }
 
 export interface AdminLandownerLead {
@@ -159,7 +185,7 @@ export interface AdminModerationReport {
   reason: string
   resolved: boolean
   createdAt: string
-  nominationPlaceType: string
+  nominationPlaceType: string | null
   nominationCouncilArea: string | null
   nominationWhyHere: string | null
   nominationStatus: NominationStatus

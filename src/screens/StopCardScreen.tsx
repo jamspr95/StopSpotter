@@ -19,6 +19,9 @@ const PLACE_LABEL: Record<string, string> = {
   other: 'Other',
 }
 
+/** A source='site_finder' stop has no place_type — SiteFinder's pipeline never asks that question (see src/types.ts). */
+const SUGGESTED_PLACE_LABEL = 'Potential stop'
+
 export function StopCardScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -54,10 +57,10 @@ export function StopCardScreen() {
       <ScreenHeader title="Stop" />
       <div className="flex-1 overflow-y-auto p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
-          {STATUS_LABEL[nomination.status]}
+          {nomination.source === 'site_finder' ? 'Suggested by AireStop' : STATUS_LABEL[nomination.status]}
         </p>
         <h2 className="font-display mt-1 text-xl font-bold text-slate-900">
-          {PLACE_LABEL[nomination.answers.placeType]}
+          {nomination.answers.placeType ? PLACE_LABEL[nomination.answers.placeType] : SUGGESTED_PLACE_LABEL}
         </h2>
         {/* A friendly approximate area (town/village), not the formal
             council/LPA boundary — that one's still Milestone 2 work

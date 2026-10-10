@@ -3,7 +3,7 @@ import { MapContainer, Marker } from 'react-leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
 import * as db from '../../lib/db'
-import { STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
+import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
 import type { AdminLandownerLead, AdminStatusHistoryEntry, NominationStatus } from '../../types'
 
@@ -89,7 +89,7 @@ export function AdminStopDetailScreen() {
       <div className="mt-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="font-display text-xl font-semibold capitalize text-slate-900">
-            {nomination.answers.placeType.replace('_', ' ')}
+            {formatEnumLabel(nomination.answers.placeType, 'Potential stop')}
           </h2>
           <p className="text-sm text-slate-500">{nomination.councilArea ?? 'Council area unknown'}</p>
         </div>
@@ -115,8 +115,8 @@ export function AdminStopDetailScreen() {
       <div className="mt-4 grid grid-cols-2 gap-4 rounded-xl bg-white p-4 shadow-sm md:grid-cols-4">
         <Stat label="Score" value={String(nomination.criteria.score)} />
         <Stat label="Votes" value={String(nomination.voteCount)} />
-        <Stat label="Pay band" value={nomination.payBand.replace(/_/g, ' ')} />
-        <Stat label="Source" value={nomination.source.replace('_', ' ')} />
+        <Stat label="Pay band" value={formatEnumLabel(nomination.payBand, 'no pay answer')} />
+        <Stat label="Source" value={SOURCE_LABEL[nomination.source]} />
       </div>
 
       {nomination.criteria.flags.length > 0 && (
@@ -132,14 +132,54 @@ export function AdminStopDetailScreen() {
 
       <div className="mt-4 grid grid-cols-2 gap-4 rounded-xl bg-white p-4 text-sm shadow-sm md:grid-cols-3">
         <Field label="Owner type" value={nomination.answers.ownerType.replace(/_/g, ' ')} />
-        <Field label="Nearest house" value={nomination.answers.nearestHouse.replace(/_/g, ' ')} />
-        <Field label="Slope" value={nomination.answers.slope.replace(/_/g, ' ')} />
+        <Field label="Nearest house" value={formatEnumLabel(nomination.answers.nearestHouse)} />
+        <Field label="Slope" value={formatEnumLabel(nomination.answers.slope)} />
         <Field label="Room for five" value={nomination.answers.roomForFive.replace(/_/g, ' ')} />
-        <Field label="Water" value={nomination.answers.water.replace(/_/g, ' ')} />
+        <Field label="Water" value={formatEnumLabel(nomination.answers.water)} />
         <Field label="Nearby" value={nomination.answers.nearby.filter((n) => n !== 'none').join(', ') || '—'} />
         <Field label="Ownership hint" value={nomination.ownershipHint || '—'} />
         <Field label="Verified" value={nomination.verified ? 'Yes' : 'No'} />
       </div>
+
+      {nomination.source !== 'user' && (
+        <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-700">AireStop (SiteFinder) detail</h3>
+          <div className="mt-2 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            <Field
+              label="AireStop score"
+              value={nomination.siteFinderScore != null ? `${Math.round(nomination.siteFinderScore * 100)}%` : '—'}
+            />
+            <Field label="Ownership confidence" value={formatEnumLabel(nomination.ownershipConfidenceDetail)} />
+            <Field
+              label="Usable area"
+              value={nomination.usableAreaM2 != null ? `${Math.round(nomination.usableAreaM2)} m²` : '—'}
+            />
+            <Field
+              label="Capacity"
+              value={nomination.capacityPitches != null ? `${nomination.capacityPitches} pitches` : '—'}
+            />
+            <Field
+              label="Avg slope"
+              value={nomination.avgSlopePercent != null ? `${nomination.avgSlopePercent.toFixed(1)}%` : '—'}
+            />
+            <Field label="Slope source" value={nomination.slopeSource || '—'} />
+            <Field label="Road access" value={formatEnumLabel(nomination.roadAccess)} />
+            <Field
+              label="Coast distance"
+              value={nomination.coastDistanceM != null ? `${(nomination.coastDistanceM / 1000).toFixed(1)} km` : '—'}
+            />
+          </div>
+          {nomination.siteFinderFlags.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-1 border-t border-slate-100 pt-3">
+              {nomination.siteFinderFlags.map((f) => (
+                <li key={f} className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+                  {f}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {nomination.whyHere && (
         <div className="mt-4 rounded-xl bg-white p-4 text-sm italic text-slate-700 shadow-sm">
@@ -150,7 +190,9 @@ export function AdminStopDetailScreen() {
       <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-700">Submitter</h3>
         {!nomination.submitterWasClaimed ? (
-          <p className="mt-2 text-sm text-slate-700">Anonymous</p>
+          <p className="mt-2 text-sm text-slate-700">
+            {nomination.source === 'site_finder' ? "Found by AireStop's automated scan — no human submitter" : 'Anonymous'}
+          </p>
         ) : !nomination.submitterEmail ? (
           <p className="mt-2 text-sm text-slate-700">Account deleted</p>
         ) : (
@@ -179,7 +221,7 @@ export function AdminStopDetailScreen() {
                   >
                     <span>
                       <span className="font-medium capitalize text-slate-800">
-                        {n.answers.placeType.replace('_', ' ')}
+                        {formatEnumLabel(n.answers.placeType, 'Potential stop')}
                       </span>
                       <span className="ml-2 text-xs text-slate-400">
                         {new Date(n.createdAt).toLocaleDateString()}

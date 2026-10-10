@@ -423,3 +423,41 @@ To add more blocked domains later, just insert more rows:
 ```sql
 insert into public.disposable_email_domains (domain) values ('example-temp-mail.com');
 ```
+
+## 12. SiteFinder candidate import (optional, Milestone 3)
+
+[`supabase/migrations/0013_site_finder_integration.sql`](../supabase/migrations/0013_site_finder_integration.sql)
+and [`0014_site_finder_admin_and_public_view.sql`](../supabase/migrations/0014_site_finder_admin_and_public_view.sql)
+implement the "one shared targets table" in `docs/PROJECT_PLAN.md`'s
+"Relationship to the site finder" — they're already applied to the live
+project, so SiteFinder-sourced rows work the moment you actually import
+some.
+
+To import a batch of SiteFinder candidates:
+
+1. On the SiteFinder side (jamspr95/sitefinder repo), produce a JSON
+   array of `to_nomination_row()` dicts (`src/sitefinder/stopspotter_export.py`)
+   — that repo's own `integration/stopspotter/README.md` has the detail.
+2. **Dashboard → Settings → API** — copy the `service_role` key (never the
+   anon key for this; the import script needs to write columns anon/
+   authenticated can't). This key bypasses RLS — treat it like a password,
+   never commit it, never put it in a `VITE_`-prefixed variable.
+3. Run:
+   ```bash
+   SUPABASE_URL=https://xxxxx.supabase.co \
+   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+   npm run import:sitefinder -- path/to/candidates.json
+   ```
+4. The script 200m-matches each candidate against existing nominations
+   (`find_nearby_nomination`) and reports how many were inserted as new
+   `source='site_finder'` rows, merged into an existing nomination
+   (`source='both'`), or refreshed in place — see the comment block at the
+   top of `scripts/import-sitefinder-candidates.mjs` for the exact merge
+   rule (a human's own form answers are never overwritten).
+5. New `site_finder` rows land with `status='submitted'`, same as any
+   other fresh nomination — they show up in the same swipe-triage queue
+   (`/admin/review`) as a human nomination, not a separate list. Move the
+   good ones to `shortlisted`/`live`. Only those two statuses show up on the **public**
+   map, with the distinct "Suggested by AireStop" marker — an
+   under-review candidate is never shown to the public, matching
+   `docs/PROJECT_PLAN.md`'s "released in small batches per area".

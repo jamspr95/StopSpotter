@@ -1,9 +1,11 @@
+import L from 'leaflet'
 import { useMemo, useRef, useState } from 'react'
 import { Circle, MapContainer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import { Link, useNavigate } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../components/MapTiles'
 import { SEED_NOMINATION_COUNT, SEED_TOTAL_SPOTTED, UK_OVERVIEW_CENTRE, UK_OVERVIEW_ZOOM } from '../data/seed'
 import { PUBLIC_FUZZ_RADIUS_M } from '../lib/geo'
+import { formatEnumLabel } from '../lib/labels'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
 import type { LatLng } from '../types'
@@ -14,6 +16,19 @@ import type { LatLng } from '../types'
  * someone was actually looking at, instead of always reopening at the UK
  * overview.
  */
+// PROJECT_PLAN.md "Relationship to the site finder": candidates SiteFinder
+// finds (not yet confirmed by a human — source='site_finder', not 'both')
+// render as a visually distinct "Suggested by AireStop" marker, so they
+// can't be mistaken for a community-backed stop at a glance. A divIcon
+// (plain HTML/CSS) rather than a second image asset — no new image to ship
+// for one colour swap.
+const suggestedIcon = L.divIcon({
+  html: '<div class="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-amber-500 text-[10px] font-bold text-white shadow-md">AS</div>',
+  className: '',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+})
+
 function ViewportTracker({ onMove }: { onMove: (centre: LatLng, zoom: number) => void }) {
   useMapEvents({
     moveend: (e) => {
@@ -76,11 +91,16 @@ export function MapScreen() {
           />
         ))}
         {nominations.map((n) => (
-          <Marker key={n.id} position={n.public}>
+          <Marker key={n.id} position={n.public} icon={n.source === 'site_finder' ? suggestedIcon : undefined}>
             <Popup>
               <div className="text-sm">
+                {n.source === 'site_finder' && (
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    Suggested by AireStop
+                  </p>
+                )}
                 <p className="mb-2 font-medium">
-                  {n.answers.placeType.replace('_', ' ')} · {n.status.replace('_', ' ')}
+                  {formatEnumLabel(n.answers.placeType, 'Potential stop')} · {n.status.replace('_', ' ')}
                 </p>
                 <button
                   type="button"

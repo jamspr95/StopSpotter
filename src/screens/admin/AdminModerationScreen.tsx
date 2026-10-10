@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { STATUS_LABEL } from '../../lib/labels'
+import { formatEnumLabel, STATUS_LABEL } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
 
 export function AdminModerationScreen() {
@@ -55,7 +55,7 @@ export function AdminModerationScreen() {
                 <div>
                   <p className="text-sm font-medium text-slate-800">{r.reason}</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {r.nominationPlaceType.replace('_', ' ')} · {r.nominationCouncilArea ?? 'Unknown council area'} ·{' '}
+                    {formatEnumLabel(r.nominationPlaceType, 'Potential stop')} · {r.nominationCouncilArea ?? 'Unknown council area'} ·{' '}
                     {STATUS_LABEL[r.nominationStatus]} · {new Date(r.createdAt).toLocaleString()}
                   </p>
                   {r.nominationWhyHere && (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { STATUS_LABEL } from '../../lib/labels'
+import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
 import type { AdminNomination, NominationStatus } from '../../types'
 
@@ -226,17 +226,27 @@ export function AdminReviewScreen() {
               )}
 
               <div className="flex h-36 flex-shrink-0 items-center justify-center bg-gradient-to-br from-brand-600 to-brand-800">
-                <span className="text-6xl">{PLACE_ICON[top.answers.placeType] ?? PLACE_ICON.other}</span>
+                <span className="text-6xl">
+                  {(top.answers.placeType ? PLACE_ICON[top.answers.placeType] : null) ?? PLACE_ICON.other}
+                </span>
               </div>
 
               <div className="flex h-[calc(100%-9rem)] flex-col overflow-y-auto p-4">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-display text-lg font-semibold capitalize text-slate-900">
-                    {top.answers.placeType.replace('_', ' ')}
+                    {formatEnumLabel(top.answers.placeType, 'Potential stop')}
                   </h3>
-                  <span className="flex-shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-                    Score {top.criteria.score}
-                  </span>
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                    {top.source !== 'user' && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        {SOURCE_LABEL[top.source]}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                      Score {top.criteria.score}
+                      {top.siteFinderScore != null && ` · AireStop ${Math.round(top.siteFinderScore * 100)}%`}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-slate-500">
                   {top.areaLabel ? `Near ${top.areaLabel}` : (top.councilArea ?? 'Area unknown')}
@@ -258,10 +268,10 @@ export function AdminReviewScreen() {
 
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                   <Field label="Owner" value={top.answers.ownerType.replace(/_/g, ' ')} />
-                  <Field label="Nearest house" value={top.answers.nearestHouse.replace(/_/g, ' ')} />
-                  <Field label="Slope" value={top.answers.slope.replace(/_/g, ' ')} />
+                  <Field label="Nearest house" value={formatEnumLabel(top.answers.nearestHouse)} />
+                  <Field label="Slope" value={formatEnumLabel(top.answers.slope)} />
                   <Field label="Room for 5" value={top.answers.roomForFive.replace(/_/g, ' ')} />
-                  <Field label="Water" value={top.answers.water.replace(/_/g, ' ')} />
+                  <Field label="Water" value={formatEnumLabel(top.answers.water)} />
                   <Field
                     label="Nearby"
                     value={top.answers.nearby.filter((a) => a !== 'none').join(', ').replace(/_/g, ' ') || '—'}
@@ -272,7 +282,9 @@ export function AdminReviewScreen() {
                   <p className="font-medium uppercase tracking-wide text-slate-400">Submitter</p>
                   <p className="mt-1 text-slate-700">
                     {!top.submitterWasClaimed
-                      ? 'Anonymous'
+                      ? top.source === 'site_finder'
+                        ? "Found by AireStop's scan"
+                        : 'Anonymous'
                       : !top.submitterEmail
                         ? 'Account deleted'
                         : top.submitterFirstName
@@ -300,7 +312,7 @@ export function AdminReviewScreen() {
                                 className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left hover:bg-white"
                               >
                                 <span className="capitalize text-slate-600">
-                                  {n.answers.placeType.replace('_', ' ')}
+                                  {formatEnumLabel(n.answers.placeType, 'Potential stop')}
                                 </span>
                                 <span className="font-medium text-brand-700">{STATUS_LABEL[n.status]}</span>
                               </button>
@@ -314,7 +326,7 @@ export function AdminReviewScreen() {
 
                 <div className="mt-auto flex items-center justify-between pt-3 text-xs text-slate-400">
                   <span>
-                    {top.voteCount} {top.voteCount === 1 ? 'vote' : 'votes'} · {top.payBand.replace(/_/g, ' ')}
+                    {top.voteCount} {top.voteCount === 1 ? 'vote' : 'votes'} · {formatEnumLabel(top.payBand, 'no pay answer')}
                   </span>
                   <button
                     type="button"

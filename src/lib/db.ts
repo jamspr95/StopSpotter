@@ -128,10 +128,11 @@ interface PublicNominationRow {
   place_type: NominationAnswers['placeType']
   nearby: NominationAnswers['nearby']
   why_here: string | null
-  pay_band: PayBand
+  pay_band: PayBand | null
   status: NominationStatus
   verified: boolean
   created_at: string
+  source: 'user' | 'site_finder' | 'both'
 }
 
 // Fields the public view doesn't expose (owner_type, criteria, exact
@@ -142,6 +143,13 @@ interface PublicNominationRow {
 // payBand/status/verified/id off a list entry). The signed-in user's own
 // full data comes from fetchMyNominations() below instead, via a
 // SECURITY DEFINER RPC that isn't subject to this column restriction.
+//
+// `source` IS real here (not a placeholder) — 0013_site_finder_integration.sql
+// adds it to the public column grant so MapScreen can render a
+// source='site_finder' row with its distinct "Suggested by AireStop"
+// styling. The view itself only ever returns such a row once it's
+// status='shortlisted'/'live' (see that migration) — nothing under
+// triage is exposed publicly, so there's no gating left to do client-side.
 function publicRowToNomination(row: PublicNominationRow): Nomination {
   const point = { lat: row.public_lat, lng: row.public_lng }
   return {
@@ -166,7 +174,7 @@ function publicRowToNomination(row: PublicNominationRow): Nomination {
     ownershipHint: '',
     status: row.status,
     verified: row.verified,
-    source: 'user',
+    source: row.source,
     createdAt: row.created_at,
   }
 }
@@ -499,7 +507,7 @@ interface AdminNominationRow {
   nearby: NominationAnswers['nearby']
   water: NominationAnswers['water']
   why_here: string | null
-  pay_band: PayBand
+  pay_band: PayBand | null
   criteria_score: number
   criteria_flags: string[]
   ownership_hint: string | null
@@ -511,6 +519,16 @@ interface AdminNominationRow {
   submitter_email: string | null
   submitter_first_name: string | null
   submitter_was_claimed: boolean
+  site_finder_score: number | null
+  site_finder_component_scores: Record<string, number> | null
+  site_finder_flags: string[]
+  usable_area_m2: number | null
+  capacity_pitches: number | null
+  avg_slope_percent: number | null
+  slope_source: string | null
+  road_access: 'good' | 'fair' | 'poor' | 'unknown' | null
+  ownership_confidence_detail: 'high' | 'medium' | 'low' | 'unknown' | null
+  coast_distance_m: number | null
 }
 
 export async function adminListNominations(): Promise<AdminNomination[]> {
@@ -544,6 +562,16 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     submitterEmail: row.submitter_email,
     submitterFirstName: row.submitter_first_name,
     submitterWasClaimed: row.submitter_was_claimed,
+    siteFinderScore: row.site_finder_score,
+    siteFinderComponentScores: row.site_finder_component_scores,
+    siteFinderFlags: row.site_finder_flags,
+    usableAreaM2: row.usable_area_m2,
+    capacityPitches: row.capacity_pitches,
+    avgSlopePercent: row.avg_slope_percent,
+    slopeSource: row.slope_source,
+    roadAccess: row.road_access,
+    ownershipConfidenceDetail: row.ownership_confidence_detail,
+    coastDistanceM: row.coast_distance_m,
   }))
 }
 
@@ -615,7 +643,7 @@ interface AdminModerationReportRow {
   reason: string
   resolved: boolean
   created_at: string
-  nomination_place_type: string
+  nomination_place_type: string | null
   nomination_council_area: string | null
   nomination_why_here: string | null
   nomination_status: NominationStatus

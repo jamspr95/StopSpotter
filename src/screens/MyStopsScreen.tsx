@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
-import { STATUS_LABEL } from '../lib/labels'
+import { formatEnumLabel, STATUS_LABEL } from '../lib/labels'
 import { useAppStore } from '../store/useAppStore'
 
 export function MyStopsScreen() {
@@ -40,7 +40,7 @@ export function MyStopsScreen() {
                     className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left"
                   >
                     <span className="text-sm text-slate-800">
-                      {n.answers.placeType.replace('_', ' ')}
+                      {formatEnumLabel(n.answers.placeType, 'Potential stop')}
                     </span>
                     <span className="text-xs font-medium text-brand-700">
                       {STATUS_LABEL[n.status]}
@@ -66,7 +66,7 @@ export function MyStopsScreen() {
                       className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-left"
                     >
                       <span className="text-sm text-slate-800">
-                        {stop ? stop.answers.placeType.replace('_', ' ') : 'Stop'}
+                        {stop ? formatEnumLabel(stop.answers.placeType, 'Potential stop') : 'Stop'}
                       </span>
                       <span className="text-xs font-medium text-brand-700">
                         {v.verified ? 'Counted' : 'Pending verification'}

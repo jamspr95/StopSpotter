@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as db from '../../lib/db'
 import { downloadCsv } from '../../lib/csv'
-import { STATUS_LABEL } from '../../lib/labels'
+import { formatEnumLabel, STATUS_LABEL } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
 import type { AdminAnalyticsSummaryRow } from '../../types'
 
@@ -46,8 +46,10 @@ export function AdminReportsScreen() {
     [nominations, councilFilter],
   )
 
+  // n.payBand is null on a source='site_finder' row (no human willingness-
+  // to-pay answer exists) — excluded here, not counted as "willing to pay".
   const willingToPay = rows.reduce(
-    (sum, n) => sum + (n.voteCount > 0 && n.payBand !== 'free_only' ? 1 : 0),
+    (sum, n) => sum + (n.voteCount > 0 && n.payBand != null && n.payBand !== 'free_only' ? 1 : 0),
     0,
   )
 
@@ -114,7 +116,7 @@ export function AdminReportsScreen() {
         doc.addPage()
         y = 16
       }
-      doc.text(n.answers.placeType.replace(/_/g, ' '), 14, y)
+      doc.text(formatEnumLabel(n.answers.placeType, 'Potential stop'), 14, y)
       doc.text(n.councilArea ?? '—', 60, y)
       doc.text(STATUS_LABEL[n.status], 110, y)
       doc.text(String(n.criteria.score), 140, y)
