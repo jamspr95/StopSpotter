@@ -167,7 +167,7 @@ export function AdminReviewScreen() {
       }
 
   return (
-    <div className="mx-auto max-w-md">
+    <div className="mx-auto max-w-md lg:max-w-6xl">
       <div className="flex items-baseline justify-between">
         <h2 className="font-display text-lg font-semibold text-slate-900">Review</h2>
         <span className="text-sm text-slate-500">{submittedQueue.length} waiting</span>
@@ -195,8 +195,18 @@ export function AdminReviewScreen() {
       )}
 
       {!loading && top && (
-        <>
-          <div className="relative mt-5 h-[480px]">
+        // Below lg, this is just the one column it's always been — the
+        // swipe card plus its action buttons. At lg+ a second column
+        // appears alongside it: the same stop's detail, unfolded into the
+        // desktop width a phone-card metaphor can't use (no Explore
+        // toggle to tap, a wider field grid, nothing cut off needing a
+        // scroll) rather than that space just sitting empty beside a
+        // narrow card. The card itself stays the same size — it's the
+        // thing you actually swipe, there's no "maximum" version of that
+        // gesture worth growing.
+        <div className="mt-5 flex flex-col items-start gap-6 lg:flex-row">
+          <div className="w-full lg:w-[420px] lg:flex-shrink-0">
+          <div className="relative h-[480px]">
             {third && (
               <div className="absolute inset-x-3 top-6 h-full scale-[0.94] rounded-2xl bg-white opacity-50 shadow" />
             )}
@@ -281,61 +291,17 @@ export function AdminReviewScreen() {
                 )}
 
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <Field label="Owner" value={top.answers.ownerType.replace(/_/g, ' ')} />
-                  <Field label="Nearest house" value={formatEnumLabel(top.answers.nearestHouse)} />
-                  <Field label="Slope" value={formatEnumLabel(top.answers.slope)} />
-                  <Field label="Room for 5" value={top.answers.roomForFive.replace(/_/g, ' ')} />
-                  <Field label="Water" value={formatEnumLabel(top.answers.water)} />
-                  <Field
-                    label="Nearby"
-                    value={top.answers.nearby.filter((a) => a !== 'none').join(', ').replace(/_/g, ' ') || '—'}
-                  />
+                  <AnswerFields top={top} />
                 </div>
 
                 <div className="mt-3 rounded-lg bg-slate-50 p-2.5 text-xs">
-                  <p className="font-medium uppercase tracking-wide text-slate-400">Submitter</p>
-                  <p className="mt-1 text-slate-700">
-                    {!top.submitterWasClaimed
-                      ? top.source === 'site_finder'
-                        ? "Found by AireStop's scan"
-                        : 'Anonymous'
-                      : !top.submitterEmail
-                        ? 'Account deleted'
-                        : top.submitterFirstName
-                          ? `${top.submitterFirstName} · ${top.submitterEmail}`
-                          : top.submitterEmail}
-                  </p>
-                  {otherSubmissions.length > 0 && (
-                    <>
-                      <button
-                        type="button"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => setOtherSitesOpenFor(showOtherSites ? null : top.id)}
-                        className="mt-1 font-medium text-brand-700 underline"
-                      >
-                        {otherSubmissions.length} other {otherSubmissions.length === 1 ? 'site' : 'sites'} from this submitter
-                      </button>
-                      {showOtherSites && (
-                        <ul className="mt-1.5 flex flex-col gap-1">
-                          {otherSubmissions.map((n) => (
-                            <li key={n.id}>
-                              <button
-                                type="button"
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={() => navigate(`/admin/stop/${n.id}`)}
-                                className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left hover:bg-white"
-                              >
-                                <span className="capitalize text-slate-600">
-                                  {formatEnumLabel(n.answers.placeType, 'Potential stop')}
-                                </span>
-                                <span className="font-medium text-brand-700">{STATUS_LABEL[n.status]}</span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </>
-                  )}
+                  <SubmitterInfo
+                    top={top}
+                    otherSubmissions={otherSubmissions}
+                    open={showOtherSites}
+                    onToggleOpen={() => setOtherSitesOpenFor(showOtherSites ? null : top.id)}
+                    onNavigate={(id) => navigate(`/admin/stop/${id}`)}
+                  />
                 </div>
 
                 <div className="mt-auto flex items-center justify-between pt-3 text-xs text-slate-400">
@@ -381,7 +347,77 @@ export function AdminReviewScreen() {
               ✓
             </button>
           </div>
-        </>
+          </div>
+
+          <div className="hidden w-full rounded-2xl bg-white p-6 shadow-sm lg:block lg:flex-1">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-display text-xl font-semibold capitalize text-slate-900">
+                  {formatEnumLabel(top.answers.placeType, 'Potential stop')}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {top.areaLabel ? `Near ${top.areaLabel}` : (top.councilArea ?? 'Area unknown')}
+                </p>
+              </div>
+              <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                {top.source !== 'user' && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                    {SOURCE_LABEL[top.source]}
+                  </span>
+                )}
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                  Score {top.criteria.score}
+                  {top.siteFinderScore != null && ` · AireStop ${Math.round(top.siteFinderScore * 100)}%`}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <SiteExplorer key={`${top.exact.lat}-${top.exact.lng}-desktop`} point={top.exact} />
+            </div>
+
+            {top.criteria.flags.length > 0 && (
+              <ul className="mt-4 flex flex-wrap gap-1">
+                {top.criteria.flags.map((f) => (
+                  <li key={f} className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {top.whyHere && (
+              <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm italic text-slate-700">"{top.whyHere}"</p>
+            )}
+
+            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+              <AnswerFields top={top} />
+            </div>
+
+            <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm">
+              <SubmitterInfo
+                top={top}
+                otherSubmissions={otherSubmissions}
+                open={showOtherSites}
+                onToggleOpen={() => setOtherSitesOpenFor(showOtherSites ? null : top.id)}
+                onNavigate={(id) => navigate(`/admin/stop/${id}`)}
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
+              <span>
+                {top.voteCount} {top.voteCount === 1 ? 'vote' : 'votes'} · {formatEnumLabel(top.payBand, 'no pay answer')}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate(`/admin/stop/${top.id}`)}
+                className="font-medium text-brand-700 underline"
+              >
+                Full details →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {lastAction && (
@@ -404,5 +440,90 @@ function Field({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
       <p className="capitalize text-slate-700">{value}</p>
     </div>
+  )
+}
+
+// Shared by the swipe card's own body (narrow, two columns) and the lg+
+// detail pane (wide, three) — same six fields either way, just the
+// surrounding grid's column count and text size differ per call site.
+function AnswerFields({ top }: { top: AdminNomination }) {
+  return (
+    <>
+      <Field label="Owner" value={top.answers.ownerType.replace(/_/g, ' ')} />
+      <Field label="Nearest house" value={formatEnumLabel(top.answers.nearestHouse)} />
+      <Field label="Slope" value={formatEnumLabel(top.answers.slope)} />
+      <Field label="Room for 5" value={top.answers.roomForFive.replace(/_/g, ' ')} />
+      <Field label="Water" value={formatEnumLabel(top.answers.water)} />
+      <Field
+        label="Nearby"
+        value={top.answers.nearby.filter((a) => a !== 'none').join(', ').replace(/_/g, ' ') || '—'}
+      />
+    </>
+  )
+}
+
+// Same reasoning as AnswerFields — identical content, used both inside the
+// swipeable card (where every button needs onPointerDown stopPropagation,
+// see this file's own header comment) and in the always-visible desktop
+// pane (where that's harmless but unnecessary either way).
+function SubmitterInfo({
+  top,
+  otherSubmissions,
+  open,
+  onToggleOpen,
+  onNavigate,
+}: {
+  top: AdminNomination
+  otherSubmissions: AdminNomination[]
+  open: boolean
+  onToggleOpen: () => void
+  onNavigate: (id: string) => void
+}) {
+  return (
+    <>
+      <p className="font-medium uppercase tracking-wide text-slate-400">Submitter</p>
+      <p className="mt-1 text-slate-700">
+        {!top.submitterWasClaimed
+          ? top.source === 'site_finder'
+            ? "Found by AireStop's scan"
+            : 'Anonymous'
+          : !top.submitterEmail
+            ? 'Account deleted'
+            : top.submitterFirstName
+              ? `${top.submitterFirstName} · ${top.submitterEmail}`
+              : top.submitterEmail}
+      </p>
+      {otherSubmissions.length > 0 && (
+        <>
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onToggleOpen}
+            className="mt-1 font-medium text-brand-700 underline"
+          >
+            {otherSubmissions.length} other {otherSubmissions.length === 1 ? 'site' : 'sites'} from this submitter
+          </button>
+          {open && (
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {otherSubmissions.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onNavigate(n.id)}
+                    className="flex w-full items-center justify-between rounded px-1.5 py-1 text-left hover:bg-white"
+                  >
+                    <span className="capitalize text-slate-600">
+                      {formatEnumLabel(n.answers.placeType, 'Potential stop')}
+                    </span>
+                    <span className="font-medium text-brand-700">{STATUS_LABEL[n.status]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </>
   )
 }
