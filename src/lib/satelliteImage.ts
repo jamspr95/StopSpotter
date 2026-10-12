@@ -19,6 +19,18 @@ export type SatelliteZoomLevel = 'wide' | 'close' | 'closer'
 const GOOGLE_ZOOM: Record<SatelliteZoomLevel, number> = { wide: 17, close: 18, closer: 19 }
 const ESRI_SPAN_M: Record<SatelliteZoomLevel, number> = { wide: 300, close: 150, closer: 75 }
 
+// Both providers get asked for genuinely more pixels than the <img> is
+// displayed at (the caller's `size` stays the CSS/display size), not a
+// bigger copy of the same data stretched to fit — that's what was missing
+// before and is the actual fix for "no clearer than Leaflet": a modern
+// phone/laptop screen renders more physical pixels than a plain 1x image
+// provides, so it looked soft regardless of zoom level. For Google this
+// is the documented `scale` parameter (free — it doesn't cost extra,
+// confirmed on Google's own Maps Platform blog); ArcGIS's /export has no
+// separate "scale" param, so the same effect is just requesting a larger
+// `size` for the same bounding box.
+const PIXEL_DENSITY = 2
+
 function esriExportUrl(point: LatLng, spanMeters: number, size: number): string {
   // Free, no key — the same World_Imagery source already used by
   // MapTiles.tsx's interactive layer, just requested as one flat image
@@ -26,13 +38,14 @@ function esriExportUrl(point: LatLng, spanMeters: number, size: number): string 
   const latDelta = spanMeters / 111_320
   const lngDelta = spanMeters / (111_320 * Math.cos((point.lat * Math.PI) / 180))
   const bbox = [point.lng - lngDelta, point.lat - latDelta, point.lng + lngDelta, point.lat + latDelta].join(',')
-  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${size},${size}&format=png32&f=image`
+  const pixels = size * PIXEL_DENSITY
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${pixels},${pixels}&format=png32&f=image`
 }
 
 /** A static satellite image centred on `point` — Google's (sharper) if configured, else the free Esri fallback. */
 export function satelliteImageUrl(point: LatLng, level: SatelliteZoomLevel = 'close', size = 480): string {
   if (isGoogleMapsConfigured) {
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${point.lat},${point.lng}&zoom=${GOOGLE_ZOOM[level]}&size=${size}x${size}&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`
+    return `https://maps.googleapis.com/maps/api/staticmap?center=${point.lat},${point.lng}&zoom=${GOOGLE_ZOOM[level]}&size=${size}x${size}&scale=${PIXEL_DENSITY}&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`
   }
   return esriExportUrl(point, ESRI_SPAN_M[level], size)
 }
