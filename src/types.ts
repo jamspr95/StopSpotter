@@ -142,6 +142,21 @@ export interface AdminNomination {
   roadAccess: 'good' | 'fair' | 'poor' | 'unknown' | null
   ownershipConfidenceDetail: 'high' | 'medium' | 'low' | 'unknown' | null
   coastDistanceM: number | null
+  // ── Title boundary match (supabase/migrations/0015_title_boundaries.sql) ──
+  // A matching registered title at this exact location, if HMLR/Registers
+  // of Scotland's bulk data has one. Null means "no known owner" — see
+  // that migration's header comment for why that's not the same as
+  // "unowned", and src/lib/priority.ts for why it's still a genuinely
+  // useful, prioritised signal (no landowner to negotiate with).
+  titleNumber: string | null
+  titleTenure: string | null
+}
+
+/** Per-nation title boundary sync coverage — supabase/migrations/0016_title_boundary_coverage.sql. */
+export interface TitleBoundaryCoverage {
+  nation: 'england_wales' | 'scotland'
+  rowCount: number
+  lastSyncedAt: string | null
 }
 
 export interface AdminLandownerLead {

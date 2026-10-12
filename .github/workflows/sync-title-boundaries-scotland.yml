@@ -1,0 +1,42 @@
+name: Sync Scotland title boundaries
+
+on:
+  schedule:
+    # Registers of Scotland updates its Cadastral Parcels dataset quarterly.
+    # Run on the 7th of Jan/Apr/Jul/Oct (03:30 UTC), a quarter-start buffer
+    # day, same reasoning as the England & Wales workflow.
+    - cron: '30 3 7 1,4,7,10 *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (parse and log, write nothing)'
+        type: boolean
+        default: false
+      county:
+        description: 'Only this Registration County (substring match); leave blank for --all'
+        type: string
+        default: ''
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350 # 33 Registration Counties, one fetch + parse each
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: |
+          ARGS="--all"
+          if [ -n "${{ inputs.county }}" ]; then
+            ARGS="--county=${{ inputs.county }}"
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          node scripts/sync-title-boundaries-scotland.mjs $ARGS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

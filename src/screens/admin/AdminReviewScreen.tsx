@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SiteExplorer } from '../../components/SiteExplorer'
+import { NoKnownOwnerBadge, TitleCoverageNotice } from '../../components/TitleBoundary'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL } from '../../lib/labels'
 import { satelliteImageUrl } from '../../lib/satelliteImage'
 import { useAdminStore } from '../../store/useAdminStore'
@@ -35,6 +36,7 @@ const ACTION_DIRECTION: Record<Action, Direction> = {
 export function AdminReviewScreen() {
   const navigate = useNavigate()
   const nominations = useAdminStore((s) => s.nominations)
+  const titleBoundaryCoverage = useAdminStore((s) => s.titleBoundaryCoverage)
   const loading = useAdminStore((s) => s.nominationsLoading)
   const error = useAdminStore((s) => s.error)
   const loadNominations = useAdminStore((s) => s.loadNominations)
@@ -175,6 +177,7 @@ export function AdminReviewScreen() {
       <p className="mt-1 text-sm text-slate-500">
         Fresh submissions, strongest first. Swipe or tap: ✕ not suitable, ↑ under review, ✓ shortlist.
       </p>
+      <TitleCoverageNotice coverage={titleBoundaryCoverage} />
 
       {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {loading && <p className="mt-4 text-sm text-slate-500">Loading…</p>}
@@ -264,6 +267,7 @@ export function AdminReviewScreen() {
                       Score {top.criteria.score}
                       {top.siteFinderScore != null && ` · AireStop ${Math.round(top.siteFinderScore * 100)}%`}
                     </span>
+                    <NoKnownOwnerBadge nomination={top} />
                   </div>
                 </div>
                 <p className="text-sm text-slate-500">
@@ -369,6 +373,7 @@ export function AdminReviewScreen() {
                   Score {top.criteria.score}
                   {top.siteFinderScore != null && ` · AireStop ${Math.round(top.siteFinderScore * 100)}%`}
                 </span>
+                <NoKnownOwnerBadge nomination={top} />
               </div>
             </div>
 

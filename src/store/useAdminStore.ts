@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import * as db from '../lib/db'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
-import type { AdminGrowthFeedback, AdminModerationReport, AdminNomination, NominationStatus } from '../types'
+import type {
+  AdminGrowthFeedback,
+  AdminModerationReport,
+  AdminNomination,
+  NominationStatus,
+  TitleBoundaryCoverage,
+} from '../types'
 
 export type AdminSessionStatus = 'checking' | 'signed_out' | 'not_admin' | 'admin'
 
@@ -10,6 +16,11 @@ interface AdminState {
   adminEmail: string | null
   nominations: AdminNomination[]
   nominationsLoading: boolean
+  // Loaded once alongside nominations, not per-row — it answers "has this
+  // nation's title data ever been loaded at all" (see
+  // 0016_title_boundary_coverage.sql), which doesn't vary nomination to
+  // nomination. Empty until loadNominations's first successful run.
+  titleBoundaryCoverage: TitleBoundaryCoverage[]
   moderationReports: AdminModerationReport[]
   moderationLoading: boolean
   growthFeedback: AdminGrowthFeedback[]
@@ -39,6 +50,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   adminEmail: null,
   nominations: [],
   nominationsLoading: false,
+  titleBoundaryCoverage: [],
   moderationReports: [],
   moderationLoading: false,
   growthFeedback: [],
@@ -85,6 +97,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       sessionStatus: 'signed_out',
       adminEmail: null,
       nominations: [],
+      titleBoundaryCoverage: [],
       moderationReports: [],
       growthFeedback: [],
     })
@@ -93,8 +106,11 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   loadNominations: async () => {
     set({ nominationsLoading: true, error: null })
     try {
-      const nominations = await db.adminListNominations()
-      set({ nominations, nominationsLoading: false })
+      const [nominations, titleBoundaryCoverage] = await Promise.all([
+        db.adminListNominations(),
+        db.adminTitleBoundaryCoverage(),
+      ])
+      set({ nominations, titleBoundaryCoverage, nominationsLoading: false })
     } catch (err) {
       set({
         nominationsLoading: false,

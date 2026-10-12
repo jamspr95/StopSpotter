@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { NoKnownOwnerBadge, TitleCoverageNotice } from '../../components/TitleBoundary'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
 import { computePriorityScore } from '../../lib/priority'
 import { useAdminStore } from '../../store/useAdminStore'
@@ -10,6 +11,7 @@ type SortKey = 'created_desc' | 'votes_desc' | 'score_desc' | 'priority_desc'
 export function AdminStopsScreen() {
   const navigate = useNavigate()
   const nominations = useAdminStore((s) => s.nominations)
+  const titleBoundaryCoverage = useAdminStore((s) => s.titleBoundaryCoverage)
   const loading = useAdminStore((s) => s.nominationsLoading)
   const error = useAdminStore((s) => s.error)
   const loadNominations = useAdminStore((s) => s.loadNominations)
@@ -18,6 +20,7 @@ export function AdminStopsScreen() {
   const [statusFilter, setStatusFilter] = useState<NominationStatus | 'all'>('all')
   const [minScore, setMinScore] = useState('')
   const [flaggedOnly, setFlaggedOnly] = useState(false)
+  const [noKnownOwnerOnly, setNoKnownOwnerOnly] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('created_desc')
 
   useEffect(() => {
@@ -37,6 +40,7 @@ export function AdminStopsScreen() {
       if (statusFilter !== 'all' && n.status !== statusFilter) return false
       if (min !== null && n.criteria.score < min) return false
       if (flaggedOnly && n.criteria.flags.length === 0) return false
+      if (noKnownOwnerOnly && n.titleNumber != null) return false
       return true
     })
     rows = [...rows].sort((a, b) => {
@@ -52,12 +56,13 @@ export function AdminStopsScreen() {
       }
     })
     return rows
-  }, [nominations, councilFilter, statusFilter, minScore, flaggedOnly, sortKey])
+  }, [nominations, councilFilter, statusFilter, minScore, flaggedOnly, noKnownOwnerOnly, sortKey])
 
   return (
     <div>
       <h2 className="font-display text-lg font-semibold text-slate-900">Stops</h2>
       <p className="mt-1 text-sm text-slate-500">{filtered.length} of {nominations.length} stops</p>
+      <TitleCoverageNotice coverage={titleBoundaryCoverage} />
 
       <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm">
         <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">
@@ -112,6 +117,16 @@ export function AdminStopsScreen() {
           Flagged only
         </label>
 
+        <label className="flex min-w-[45%] flex-1 items-center gap-2 pb-2 text-sm text-slate-700 sm:flex-none">
+          <input
+            type="checkbox"
+            checked={noKnownOwnerOnly}
+            onChange={(e) => setNoKnownOwnerOnly(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          No known owner only
+        </label>
+
         <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">
           <label className="block text-xs font-medium text-slate-500">Sort by</label>
           <select
@@ -146,6 +161,7 @@ export function AdminStopsScreen() {
                 <th className="p-3">Score</th>
                 <th className="p-3">Flags</th>
                 <th className="p-3">Votes</th>
+                <th className="p-3">Title</th>
               </tr>
             </thead>
             <tbody>
@@ -171,11 +187,14 @@ export function AdminStopsScreen() {
                   <td className="p-3 text-slate-600">{n.criteria.score}</td>
                   <td className="p-3 text-slate-600">{n.criteria.flags.length || '—'}</td>
                   <td className="p-3 text-slate-600">{n.voteCount}</td>
+                  <td className="p-3">
+                    <NoKnownOwnerBadge nomination={n} />
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-slate-400">
+                  <td colSpan={9} className="p-6 text-center text-slate-400">
                     No stops match these filters.
                   </td>
                 </tr>
@@ -214,6 +233,9 @@ export function AdminStopsScreen() {
                     <span>
                       {n.voteCount} {n.voteCount === 1 ? 'vote' : 'votes'}
                     </span>
+                  </div>
+                  <div className="mt-1.5">
+                    <NoKnownOwnerBadge nomination={n} />
                   </div>
                 </button>
               </li>

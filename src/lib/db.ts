@@ -15,6 +15,7 @@ import type {
   NominationAnswers,
   NominationStatus,
   PayBand,
+  TitleBoundaryCoverage,
   Vote,
 } from '../types'
 
@@ -529,6 +530,8 @@ interface AdminNominationRow {
   road_access: 'good' | 'fair' | 'poor' | 'unknown' | null
   ownership_confidence_detail: 'high' | 'medium' | 'low' | 'unknown' | null
   coast_distance_m: number | null
+  title_number: string | null
+  title_tenure: string | null
 }
 
 export async function adminListNominations(): Promise<AdminNomination[]> {
@@ -572,6 +575,24 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     roadAccess: row.road_access,
     ownershipConfidenceDetail: row.ownership_confidence_detail,
     coastDistanceM: row.coast_distance_m,
+    titleNumber: row.title_number,
+    titleTenure: row.title_tenure,
+  }))
+}
+
+interface TitleBoundaryCoverageRow {
+  nation: 'england_wales' | 'scotland'
+  row_count: number
+  last_synced_at: string | null
+}
+
+export async function adminTitleBoundaryCoverage(): Promise<TitleBoundaryCoverage[]> {
+  const { data, error } = await client().rpc('admin_title_boundary_coverage')
+  if (error) throw error
+  return (data as TitleBoundaryCoverageRow[]).map((row) => ({
+    nation: row.nation,
+    rowCount: row.row_count,
+    lastSyncedAt: row.last_synced_at,
   }))
 }
 

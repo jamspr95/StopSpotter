@@ -3,6 +3,7 @@ import { MapContainer, Marker } from 'react-leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
 import { SiteExplorer } from '../../components/SiteExplorer'
+import { NoKnownOwnerPanel, TitleCoverageNotice } from '../../components/TitleBoundary'
 import * as db from '../../lib/db'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
@@ -19,6 +20,7 @@ export function AdminStopDetailScreen() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const nominations = useAdminStore((s) => s.nominations)
+  const titleBoundaryCoverage = useAdminStore((s) => s.titleBoundaryCoverage)
   const loadNominations = useAdminStore((s) => s.loadNominations)
   const updateNominationStatus = useAdminStore((s) => s.updateNominationStatus)
 
@@ -125,6 +127,11 @@ export function AdminStopDetailScreen() {
         <Stat label="Votes" value={String(nomination.voteCount)} />
         <Stat label="Pay band" value={formatEnumLabel(nomination.payBand, 'no pay answer')} />
         <Stat label="Source" value={SOURCE_LABEL[nomination.source]} />
+      </div>
+
+      <TitleCoverageNotice coverage={titleBoundaryCoverage} />
+      <div className="mt-4">
+        <NoKnownOwnerPanel nomination={nomination} />
       </div>
 
       {nomination.criteria.flags.length > 0 && (

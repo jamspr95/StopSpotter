@@ -528,3 +528,73 @@ opens (cached per site for the session, not refetched on every tab
 switch), which is well inside occasional use — but if this ever gets busy
 enough to matter, the fix is a self-hosted Overpass instance or a paid
 places API, not a code change here.
+
+## 15. Title boundary data — "no known owner" sites (optional, Milestone 3)
+
+[`supabase/migrations/0015_title_boundaries.sql`](../supabase/migrations/0015_title_boundaries.sql)
+and [`0016_title_boundary_coverage.sql`](../supabase/migrations/0016_title_boundary_coverage.sql)
+add a `title_boundaries` table that's checked against every nomination's
+exact location: a match means "a registered title exists roughly here"
+(HM Land Registry for England & Wales, Registers of Scotland for
+Scotland); no match is labelled **"no known owner"** everywhere in the
+admin UI, never "unowned" — England & Wales alone has an estimated
+10-14% of land still unregistered (HMLR's own published figures),
+overwhelmingly older rural land, which is exactly the kind of land
+StopSpotter's nominations skew toward. "No known owner" is treated as a
+*positive* signal in `src/lib/priority.ts`'s admin sort — no registered
+title means no landowner to negotiate a lease with, so a site that gets
+through this way keeps close to 100% margin.
+
+The table starts empty, same as `council_boundaries` in §7 — nothing
+breaks by skipping this, every nomination just shows "no known owner"
+until it's loaded (the admin dashboard's coverage notice says so plainly
+rather than letting that look like a real result).
+
+**Read this before trusting it on a schedule:** the two sync scripts
+(`scripts/sync-title-boundaries-ew.mjs`, `scripts/sync-title-boundaries-scotland.mjs`)
+were written and tested against synthetic data built from HMLR's and
+Registers of Scotland's *documented* INSPIRE Cadastral Parcels schema —
+there was no way, from the environment they were built in, to download a
+real file from either registry and check the parser against it. Both
+scripts are deliberately tolerant (they search by element name, ignoring
+exact namespace prefixes, and try several plausible property names) and
+fail loudly (they throw rather than silently writing zero/partial rows)
+rather than guessing — but "tolerant" isn't "verified". **Run both with
+`--dry-run` against one real council/county first** and check the logged
+sample (a parsed title number and point count) before ever relying on the
+scheduled runs.
+
+To set it up:
+
+1. The two tables/functions are already applied to the live project — no
+   migration step needed.
+2. **Dashboard → Settings → API** — copy the `service_role` key, same
+   warning as §12: never the anon key, never commit it, never a `VITE_`-
+   prefixed variable.
+3. Add two **GitHub Actions repo secrets** (Settings → Secrets and
+   variables → Actions): `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` —
+   plain names, not the `VITE_`-prefixed ones from §4 (those are for the
+   client bundle; these are for a server-side script with write access
+   RLS doesn't grant anon/authenticated).
+4. **Test against real data first.** From **Actions → Sync England &
+   Wales title boundaries / Sync Scotland title boundaries → Run
+   workflow**, tick **Dry run** and optionally set **Council**/**County**
+   to one small area, then open the run's log and check the sample it
+   printed looks right (a real-looking title number, a sensible point
+   count). Repeat for the other nation. If it throws instead — the error
+   message names what it expected and didn't find — the parser's
+   assumptions about that registry's current file format need updating
+   before this is trusted unattended; this is deliberately the moment
+   that surfaces, not something sitting silently in a cron log.
+5. Once a dry run looks right, run it again without **Dry run** to do a
+   real load, or just leave it — the two scheduled workflows
+   (`.github/workflows/sync-title-boundaries-ew.yml`,
+   `-scotland.yml`) pick it up automatically: monthly for England & Wales
+   (HMLR publishes ~the 6th of each month), quarterly for Scotland
+   (Registers of Scotland's own publish cadence). Both can also always be
+   triggered manually the same way as step 4.
+6. Nothing else to configure — once rows exist, `admin_list_nominations()`
+   starts returning a real `title_number`/`title_tenure` match (or `null`)
+   for every nomination immediately, no redeploy needed, and the admin
+   dashboard's coverage notice (§ above) stops showing once both nations
+   have at least some data loaded.

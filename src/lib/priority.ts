@@ -31,9 +31,27 @@ import type { AdminNomination } from '../types'
  *    ownerType answer (knowing it's council/public land, or the nominator
  *    owns it outright, is itself a real ownership signal even without a
  *    SiteFinder scan).
+ *
+ * On top of those three, a small flat NO_KNOWN_OWNER_BOOST applies when
+ * supabase/migrations/0015_title_boundaries.sql's bulk title lookup found
+ * no matching registered title at this exact location. "No known owner"
+ * isn't a caveat here — it's a business-positive signal: no registered
+ * title at the pin means no landowner to find and negotiate a lease with,
+ * so a site that gets through this way keeps ~100% margin instead of
+ * costing a rent/revenue share. It's additive on top of the weighted
+ * score above (not blended into ownershipKnown, which is about *whether
+ * ownership is understood*, a different question from *whether using the
+ * site costs anything*), and deliberately small — a bad-fit site with no
+ * known owner still shouldn't outrank a great-fit site with one.
  */
 export function computePriorityScore(n: AdminNomination): number {
-  return 0.4 * stopFit(n) + 0.4 * demand(n) + 0.2 * ownershipKnown(n)
+  return 0.4 * stopFit(n) + 0.4 * demand(n) + 0.2 * ownershipKnown(n) + noKnownOwnerBoost(n)
+}
+
+const NO_KNOWN_OWNER_BOOST = 0.15
+
+function noKnownOwnerBoost(n: AdminNomination): number {
+  return n.titleNumber == null ? NO_KNOWN_OWNER_BOOST : 0
 }
 
 function normalizedCriteriaScore(score: number): number {

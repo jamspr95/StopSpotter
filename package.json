@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
+    "fast-xml-parser": "^5.11.2",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "react": "^19.2.8",
