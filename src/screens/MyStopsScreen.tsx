@@ -8,6 +8,7 @@ export function MyStopsScreen() {
   const currentUser = useAppStore((s) => s.currentUser)
   const allNominations = useAppStore((s) => s.nominations)
   const allVotes = useAppStore((s) => s.votes)
+  const beginSignIn = useAppStore((s) => s.beginSignIn)
   const nominations = currentUser
     ? allNominations.filter((n) => n.userId === currentUser.id)
     : []
@@ -18,9 +19,22 @@ export function MyStopsScreen() {
       <ScreenHeader title="My Stops" />
       <div className="flex-1 overflow-y-auto p-5">
         {!currentUser && (
-          <p className="text-sm text-slate-500">
-            Nominate or vote on a stop and sign up to see it here.
-          </p>
+          <div>
+            <p className="text-sm text-slate-500">
+              Nominated or voted on a different browser or device? Sign in with the same email to
+              see it here. Haven't done either yet? Sign in anyway to get on our list.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                beginSignIn()
+                navigate('/spot/signup')
+              }}
+              className="mt-4 w-full rounded-xl bg-brand-600 py-3 text-base font-semibold text-white active:bg-brand-700"
+            >
+              Sign in
+            </button>
+          </div>
         )}
 
         {currentUser && nominations.length === 0 && votes.length === 0 && (

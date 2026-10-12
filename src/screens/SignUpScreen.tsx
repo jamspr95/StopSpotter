@@ -19,16 +19,19 @@ const SSO_PROVIDERS: Array<{ id: SSOProvider; label: string }> = [
  * share buttons). growth_feedback doesn't — it's a toast on the Support
  * page, not a new page (SupportScreen reads growthFeedbackThanks), so a
  * supporter who had to leave Support to give an email lands straight back
- * there instead of on an unrelated screen.
+ * there instead of on an unrelated screen. sign_in doesn't either — there's
+ * nothing to celebrate, just back to the screen that sent them here.
  */
 function navigateAfterFlow(
   navigate: NavigateFunction,
-  flowType: 'nomination' | 'vote' | 'growth_feedback',
+  flowType: 'nomination' | 'vote' | 'growth_feedback' | 'sign_in',
   fromPath: string,
 ) {
   if (flowType === 'growth_feedback') {
     logEvent('growth_feedback_submit', fromPath)
     navigate('/support', { state: { growthFeedbackThanks: true } })
+  } else if (flowType === 'sign_in') {
+    navigate('/my-stops')
   } else {
     navigate('/done', { state: { flowType } })
   }
@@ -99,7 +102,7 @@ export function SignUpScreen() {
   if (alreadySignedInOnMount) {
     return (
       <div className="flex h-dvh flex-col">
-        <ScreenHeader title="Almost done" onBack={false} />
+        <ScreenHeader title={flowTypeOnMount === 'sign_in' ? 'Signing in' : 'Almost done'} onBack={false} />
         <div className="flex-1 p-5">
           {continuingError ? (
             <>
@@ -150,7 +153,14 @@ export function SignUpScreen() {
 
   const isNomination = pendingFlow.type === 'nomination'
   const isGrowthFeedback = pendingFlow.type === 'growth_feedback'
-  const confirmWhat = isNomination ? 'your nomination' : isGrowthFeedback ? 'your note' : 'your vote'
+  const isSignIn = pendingFlow.type === 'sign_in'
+  const confirmWhat = isNomination
+    ? 'your nomination'
+    : isGrowthFeedback
+      ? 'your note'
+      : isSignIn
+        ? 'your sign-in'
+        : 'your vote'
   const emailFormatValid = /\S+@\S+\.\S+/.test(email)
   const emailIsDisposable = emailFormatValid && isDisposableEmail(email)
   const emailValid = emailFormatValid && !emailIsDisposable
@@ -227,7 +237,7 @@ export function SignUpScreen() {
   return (
     <div className="flex h-dvh flex-col">
       <ScreenHeader
-        title="Almost done"
+        title={isSignIn ? 'Sign in' : 'Almost done'}
         onBack={() => {
           cancelPendingFlow()
           navigate(-1)
@@ -287,7 +297,9 @@ export function SignUpScreen() {
             ? "We'll use your email to sign you in, check you're genuine, and get back to you about this."
             : isNomination
               ? "We've already noted your stop. We'll use your email to sign you in, check it's genuine, and tell you what happens to it."
-              : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
+              : isSignIn
+                ? "We'll use your email to sign you in — on a browser you've used before, this brings back anything you've already nominated or voted on. First time here? This is all you need to get started."
+                : "We'll use your email to sign you in, check your submission is genuine, and tell you what happens to stops you spot."}
         </p>
 
         <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">

@@ -70,6 +70,12 @@ type PendingFlow =
   | { type: 'nomination'; draft: DraftNomination }
   | { type: 'vote'; draft: DraftVote }
   | { type: 'growth_feedback'; draft: DraftGrowthFeedback }
+  // No draft — a bare sign-in has nothing attached to it. Lets My Stops
+  // offer "sign in" to a returning supporter (to see what they did on
+  // another browser) and to someone who's never nominated or voted at all
+  // (to just get on the list), without needing to start one of the other
+  // flows first just to reach the email step.
+  | { type: 'sign_in' }
   | null
 
 interface Identity {
@@ -97,7 +103,7 @@ interface AppState {
   pendingIdentity: Identity | null
   /** Id of the nomination/vote/growth-feedback note just created, awaiting the simulated magic-link click (local-only mode only). */
   awaitingVerificationId: string | null
-  awaitingVerificationKind: 'nomination' | 'vote' | 'growth_feedback' | null
+  awaitingVerificationKind: 'nomination' | 'vote' | 'growth_feedback' | 'sign_in' | null
   /**
    * Real-backend mode only: which auth flow is in flight, until
    * completePendingSignIn() runs and clears it back to null.
@@ -120,6 +126,8 @@ interface AppState {
   updateVoteDraft: (patch: Partial<DraftVote>) => void
   /** Support page quick options: starts the same email-capture flow nomination/vote use, so there's someone to follow up with. */
   beginGrowthFeedback: (options: string[], message?: string) => void
+  /** My Stops' empty state: the same email-capture flow, with nothing attached to write — see PendingFlow's 'sign_in' case. */
+  beginSignIn: () => void
   cancelPendingFlow: () => void
   /**
    * Starts the email-capture step for whatever's pending. Nominations are
@@ -322,10 +330,14 @@ async function writePendingFlowRecord(
     if (draft.landowner) {
       await db.insertLandownerLead(draft.nominationId, draft.landowner)
     }
-  } else {
+  } else if (pendingFlow.type === 'growth_feedback') {
     const draft = pendingFlow.draft
     await db.insertGrowthFeedback(draft.options, draft.message ?? null, email)
   }
+  // sign_in: nothing to write — that's the whole point, there's no
+  // nomination/vote/note attached to it. completePendingSignIn's
+  // upsertProfile/insertConsents calls above this still apply, so signing
+  // up with nothing pending still records a name/consents if given.
 }
 
 /** Real-backend mode: writes whatever's in pendingFlow/pendingIdentity now that a session exists. Called from initRealBackend's auth listener. */
@@ -398,6 +410,8 @@ export const useAppStore = create<AppState>()(
 
       beginGrowthFeedback: (options, message) =>
         set({ pendingFlow: { type: 'growth_feedback', draft: { options, message } } }),
+
+      beginSignIn: () => set({ pendingFlow: { type: 'sign_in' } }),
 
       saveNominationDraft: async () => {
         const flow = get().pendingFlow
@@ -486,7 +500,7 @@ export const useAppStore = create<AppState>()(
               ),
             }))
           }
-        } else {
+        } else if (flow.type === 'growth_feedback') {
           // growth_feedback — local-only mode has no backend table to write
           // to; still run the same simulated verify step as nomination/vote
           // for a consistent UI, there's just nothing for confirmMagicLink
@@ -494,6 +508,14 @@ export const useAppStore = create<AppState>()(
           set({
             awaitingVerificationId: `growth-${crypto.randomUUID()}`,
             awaitingVerificationKind: 'growth_feedback',
+          })
+        } else {
+          // sign_in — nothing to write here either (currentUser above is
+          // already the whole point of this flow), just the same simulated
+          // verify step for a consistent UI.
+          set({
+            awaitingVerificationId: `signin-${crypto.randomUUID()}`,
+            awaitingVerificationKind: 'sign_in',
           })
         }
       },
@@ -553,8 +575,8 @@ export const useAppStore = create<AppState>()(
             }))
           }
         }
-        // growth_feedback: local-only mode has no backend table to write to
-        // — same as finalizePendingFlow's local-only branch, nothing to do.
+        // growth_feedback/sign_in: nothing to write — same as
+        // finalizePendingFlow's local-only branch, nothing to do for either.
 
         set({ pendingFlow: null })
       },
@@ -583,7 +605,7 @@ export const useAppStore = create<AppState>()(
             ),
           }))
         }
-        // growth_feedback: nothing local to flip — local-only mode never wrote it anywhere.
+        // growth_feedback/sign_in: nothing local to flip — neither wrote anything to flip.
 
         set({ pendingFlow: null, awaitingVerificationId: null, awaitingVerificationKind: null })
       },
