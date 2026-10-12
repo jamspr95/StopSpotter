@@ -31,6 +31,11 @@ jobs:
           # then just runs in local-only mode, same as Milestone 1.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Also unset until added as a secret (docs/SETUP.md §13) — sharper
+          # admin satellite imagery + Street View fall back to the free
+          # Esri layer with no Street View until this is set, same pattern
+          # as the two above.
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           # Not a secret (just a feature flag) — set as a repo VARIABLE
           # (Settings -> Secrets and variables -> Actions -> Variables tab),
           # not a secret, once SSO is actually configured in Supabase.
