@@ -116,7 +116,7 @@ export function AdminStopDetailScreen() {
       <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-slate-700">Explore</h3>
         <div className="mt-2">
-          <SiteExplorer point={nomination.exact} />
+          <SiteExplorer key={`${nomination.exact.lat}-${nomination.exact.lng}`} point={nomination.exact} />
         </div>
       </div>
 

@@ -2,39 +2,37 @@ import type { LatLng } from '../types'
 
 /**
  * Admin-only sharper satellite imagery + Street View — docs/SETUP.md §13.
- * The Maps Static/Embed APIs are genuinely billed per load (Static:
- * ~$2/1,000; Embed's Street View mode is free, confirmed on Google's own
- * usage-and-billing page) — cheap at admin-only review volume, but a real
- * key is required either way, so everything here degrades to the free
- * Esri layer already used on the public map when no key is configured.
+ * Both now go through the Maps Embed API's free, unlimited modes (view
+ * and streetview — confirmed on Google's own usage-and-billing page: a
+ * basic Embed mode, no per-load charge, panning/zooming included). The
+ * one-off static image this used to request from the paid Maps Static
+ * API (~$2/1,000) is gone — there's nothing left here that costs money.
+ * Everything still degrades to the free Esri layer already used on the
+ * public map when no key is configured.
  */
 export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 export const isGoogleMapsConfigured = Boolean(GOOGLE_MAPS_API_KEY)
 
 export type SatelliteZoomLevel = 'wide' | 'close' | 'closer'
 
-// Google's `zoom` is a discrete level; the Esri fallback instead needs a
-// span in metres to build a bounding box, so each preset keeps a rough
-// manual equivalent for both rather than deriving one from the other.
-const GOOGLE_ZOOM: Record<SatelliteZoomLevel, number> = { wide: 17, close: 18, closer: 19 }
 const ESRI_SPAN_M: Record<SatelliteZoomLevel, number> = { wide: 300, close: 150, closer: 75 }
 
-// Both providers get asked for genuinely more pixels than the <img> is
-// displayed at (the caller's `size` stays the CSS/display size), not a
-// bigger copy of the same data stretched to fit — that's what was missing
-// before and is the actual fix for "no clearer than Leaflet": a modern
-// phone/laptop screen renders more physical pixels than a plain 1x image
-// provides, so it looked soft regardless of zoom level. For Google this
-// is the documented `scale` parameter (free — it doesn't cost extra,
-// confirmed on Google's own Maps Platform blog); ArcGIS's /export has no
-// separate "scale" param, so the same effect is just requesting a larger
-// `size` for the same bounding box.
+// Esri's /export has no separate "scale"/retina parameter the way Google's
+// APIs do — the same effect (genuinely more source pixels over the same
+// geographic area, not a bigger copy of the same data stretched to fit)
+// means just asking for a larger `size` than the <img> is displayed at.
 const PIXEL_DENSITY = 2
 
-function esriExportUrl(point: LatLng, spanMeters: number, size: number): string {
-  // Free, no key — the same World_Imagery source already used by
-  // MapTiles.tsx's interactive layer, just requested as one flat image
-  // (ArcGIS REST's /export operation) instead of a tiled, pannable map.
+/**
+ * A static satellite thumbnail centred on `point` — the swipe card's
+ * "profile picture" and nothing else now (see satelliteEmbedUrl for the
+ * actual pannable explore view). Always the free Esri layer: this is a
+ * small glance-preview next to an "Explore" button, not something worth
+ * spending the Embed API's one billed mode budget on were it ever to need
+ * one — it doesn't.
+ */
+export function satelliteImageUrl(point: LatLng, level: SatelliteZoomLevel = 'close', size = 480): string {
+  const spanMeters = ESRI_SPAN_M[level]
   const latDelta = spanMeters / 111_320
   const lngDelta = spanMeters / (111_320 * Math.cos((point.lat * Math.PI) / 180))
   const bbox = [point.lng - lngDelta, point.lat - latDelta, point.lng + lngDelta, point.lat + latDelta].join(',')
@@ -42,12 +40,19 @@ function esriExportUrl(point: LatLng, spanMeters: number, size: number): string 
   return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${pixels},${pixels}&format=png32&f=image`
 }
 
-/** A static satellite image centred on `point` — Google's (sharper) if configured, else the free Esri fallback. */
-export function satelliteImageUrl(point: LatLng, level: SatelliteZoomLevel = 'close', size = 480): string {
-  if (isGoogleMapsConfigured) {
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${point.lat},${point.lng}&zoom=${GOOGLE_ZOOM[level]}&size=${size}x${size}&scale=${PIXEL_DENSITY}&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`
-  }
-  return esriExportUrl(point, ESRI_SPAN_M[level], size)
+/**
+ * A pannable, zoomable satellite map (Maps Embed API's `view` mode) — the
+ * actual "explore around the site" view. Free and unlimited, same as
+ * Street View below: Google's own billing page says panning, zooming and
+ * switching layers inside an embed don't generate extra loads. There's no
+ * free equivalent of Google's own satellite basemap to fall back to here
+ * (unlike the static thumbnail above) — callers without a key should use
+ * a real Leaflet <MapContainer> with the existing MapTiles component
+ * instead, which is exactly as pannable and is what the public map
+ * already uses.
+ */
+export function satelliteEmbedUrl(point: LatLng, zoom = 18): string {
+  return `https://www.google.com/maps/embed/v1/view?key=${GOOGLE_MAPS_API_KEY}&center=${point.lat},${point.lng}&zoom=${zoom}&maptype=satellite`
 }
 
 /**

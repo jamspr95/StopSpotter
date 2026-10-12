@@ -262,7 +262,7 @@ export function AdminReviewScreen() {
 
                 {showExplore && (
                   <div className="mt-3">
-                    <SiteExplorer point={top.exact} compact />
+                    <SiteExplorer key={`${top.exact.lat}-${top.exact.lng}`} point={top.exact} compact />
                   </div>
                 )}
 

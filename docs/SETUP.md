@@ -462,36 +462,34 @@ To import a batch of SiteFinder candidates:
    under-review candidate is never shown to the public, matching
    `docs/PROJECT_PLAN.md`'s "released in small batches per area".
 
-## 13. Sharper satellite imagery + Street View on admin screens (optional)
+## 13. Pannable satellite + Street View on admin screens (optional, free)
 
 The swipe-review queue (`/admin/review`) and the full stop-detail screen
-(`/admin/stop/:id`) both have an "Explore" satellite image + Street View
-panel (`src/components/SiteExplorer.tsx`). With nothing configured, this
-already works using the same free Esri imagery the public map uses — no
-setup needed. Adding a Google Maps API key sharpens the satellite image
-(Esri's free layer has genuinely low resolution over a lot of rural GB)
-and turns on Street View, which has no free equivalent at all.
+(`/admin/stop/:id`) both have an "Explore" panel
+(`src/components/SiteExplorer.tsx`) — Satellite, Street View and Nearby
+tabs, so an admin can look around a site without leaving either screen.
+With nothing configured, Satellite already works — a real, pannable
+Leaflet map on the same free Esri imagery the public map uses, no setup
+needed. Adding a Google Maps API key swaps that for Google's own
+satellite basemap (also pannable) and turns on Street View, which has no
+free equivalent at all.
 
-**Cost, so you can decide if it's worth it:** the Street View embed itself
-is free and unlimited (Google's Maps Embed API has no per-load charge,
-confirmed on Google's own pricing page). The sharper satellite image uses
-the Maps Static API instead, which is pay-as-you-go at roughly $2 per
-1,000 image loads. This is an admin-only screen, not the public app, so
-at realistic review volumes that's pennies a month — but it is a real,
-metered cost against your own Google Cloud billing, not a flat free tier.
-(We looked at Ordnance Survey's aerial imagery as a UK-specific
-alternative first — it turned out to be priced per tile/location, roughly
-£28-36+VAT per small section, which scales with how many stops you have
-rather than how often you look at them, so it's a poor fit here.)
+**Cost: none.** Earlier this used the Maps Static API (a single still
+image, billed per load) for the satellite tab, which is why it looked no
+sharper than Leaflet — a flat image can't be panned to see what's
+actually sharper about it, and it cost money for the privilege. It's
+since been replaced with the Maps Embed API's `view` mode: the exact same
+free, unlimited product Street View already uses (confirmed on Google's
+own usage-and-billing page — panning, zooming and switching layers inside
+an embed generate no extra loads). Nothing in this feature bills your
+Google Cloud account.
 
 1. **Create a Google Cloud project** (or use an existing one) at
    [console.cloud.google.com](https://console.cloud.google.com), and
    confirm it has a billing account attached — Google requires this to
-   issue any Maps Platform key, even for the free Embed API.
-2. **APIs & Services → Library** — enable **Maps Embed API** (for Street
-   View) and **Maps Static API** (for the sharper satellite image). Skip
-   the Static one if you only want Street View and are happy keeping the
-   free Esri image.
+   issue any Maps Platform key, even though nothing here is billed.
+2. **APIs & Services → Library** — enable **Maps Embed API**. That's the
+   only one needed now; there's no second API for the satellite view.
 3. **APIs & Services → Credentials → Create credentials → API key.**
 4. **Restrict the key before using it anywhere.** Click into the new key,
    under **Application restrictions** choose **HTTP referrers**, and add
@@ -499,13 +497,34 @@ rather than how often you look at them, so it's a poor fit here.)
    `http://localhost:*` for local dev. This matters more than it would for
    the Supabase anon key: `VITE_`-prefixed variables ship inside the
    client bundle, so this key **will** be readable by anyone who opens
-   the site's dev tools. An unrestricted key is a billing-abuse risk
-   (someone else running up charges on your account), not just an exposed
-   secret — the referrer restriction is what actually protects you, not
-   keeping the key "hidden" (it can't be).
+   the site's dev tools. A restricted key just stops working from anywhere
+   else — it's not really about secrecy (the key can't be hidden), it's
+   what keeps someone else's unrelated project from using yours.
 5. Add it as `VITE_GOOGLE_MAPS_API_KEY` in `.env.local` for local dev, and
    as a GitHub Actions repo secret for the deployed build (same two-place
-   pattern as `VITE_SUPABASE_URL` in §4 above).
+   pattern as `VITE_SUPABASE_URL` in §4 above) — **and** confirm
+   `.github/workflows/deploy.yml`'s build step actually passes it through
+   (`VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}`).
+   The secret alone does nothing if that line isn't there — this bit us
+   once already.
 
 Nothing breaks by skipping this — both admin screens keep working on the
-free Esri image, just without Street View, same as today.
+free, pannable Esri map, just without Street View, same as today.
+
+## 14. "Nearby" tab — named venues and distance (always on, no setup)
+
+The Explore panel's third tab lists real places near a site by name and
+distance ("The Golden Lion · Pub · 800m") — pulled live from
+OpenStreetMap's Overpass API (`src/lib/nearbyPlaces.ts`), not the
+nomination's own coarse `nearby` checkboxes (those have no name or
+distance to give). No API key, nothing to configure.
+
+**Worth knowing, not worth setting anything up for yet:** Overpass's
+public server (`overpass-api.de`) is a shared community instance.
+Its own usage guidance asks regular or commercial users to keep well
+under its published daily limits, or self-host, rather than relying on it
+at real volume. This is one on-demand lookup per stop an admin actually
+opens (cached per site for the session, not refetched on every tab
+switch), which is well inside occasional use — but if this ever gets busy
+enough to matter, the fix is a self-hosted Overpass instance or a paid
+places API, not a code change here.
