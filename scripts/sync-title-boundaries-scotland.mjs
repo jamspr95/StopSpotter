@@ -91,25 +91,39 @@ async function findCountyLinks() {
   }
 
   if (links.length === 0) {
-    const allHrefs = [...html.matchAll(/<a[^>]+href="([^"]+)"/gi)].map((m) => m[1])
-    const uniqueHrefs = [...new Set(allHrefs)]
+    // Confirmed live (Oct 2026): this is a client-rendered Next.js app — a
+    // <select> populated via client-side JS, not a server-rendered list —
+    // so the file links never appear in this page's own HTML at all. The
+    // real API it calls has to live in its JS bundles, so fetch every
+    // <script src> found and scan their text for string literals that
+    // look like an API path or a filename, rather than dumping the HTML
+    // (already seen in a prior run's log, see git history) or guessing.
     const scriptSrcs = [...new Set([...html.matchAll(/<script[^>]+src="([^"]+)"/gi)].map((m) => m[1]))]
-    const hintIndex = html.search(/\.(zip|gml)/i)
-    // If this is a client-rendered app (no <a href> links to the actual
-    // files appear in the server HTML at all), the <script> bundle URLs
-    // are the next place to look for the real API/data it calls.
+    const scriptTexts = await Promise.all(
+      scriptSrcs.map(async (src) => {
+        try {
+          const url = src.startsWith('http') ? src : new URL(src, DOWNLOAD_PAGE).toString()
+          const r = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+          return r.ok ? await r.text() : ''
+        } catch {
+          return ''
+        }
+      }),
+    )
+    const combined = scriptTexts.join('\n')
+    const apiLikeStrings = [
+      ...new Set(
+        [...combined.matchAll(/"(\/[a-zA-Z0-9_\-./]*(?:api|download|county|counties|file|zip|gml|csv)[a-zA-Z0-9_\-./]*)"/gi)].map(
+          (m) => m[1],
+        ),
+      ),
+    ]
     throw new Error(
       [
-        `Parsed zero county file links from the download page (${html.length} bytes of HTML) — the page's structure isn't what was assumed and this scraper needs updating, not a stale page.`,
-        `Total <a href> tags found: ${allHrefs.length} (${uniqueHrefs.length} unique). Sample hrefs:`,
-        ...uniqueHrefs.slice(0, 25).map((h) => `  ${h}`),
-        `<script src> URLs found (${scriptSrcs.length}):`,
-        ...scriptSrcs.map((s) => `  ${s}`),
-        hintIndex === -1
-          ? 'No case-insensitive ".zip"/".gml" substring found anywhere in the page at all.'
-          : `First ".zip"/".gml" mention, with context:\n${html.slice(Math.max(0, hintIndex - 400), hintIndex + 100)}`,
-        'Full page HTML follows:',
-        html,
+        `Parsed zero county file links from the download page (${html.length} bytes of HTML) — it's a client-rendered app (a <select> populated by JS), not a server-rendered list, so no file links appear in the page's own HTML.`,
+        `Scanned ${scriptSrcs.length} JS bundle(s) (${combined.length} bytes total) for API-shaped string literals (containing api/download/county/file/zip/gml/csv). Found ${apiLikeStrings.length}:`,
+        ...apiLikeStrings.slice(0, 60).map((s) => `  ${s}`),
+        apiLikeStrings.length === 0 ? '(none found — the real API path may be built dynamically rather than appearing as a literal, needs a browser-based look instead of a text scan)' : '',
       ].join('\n'),
     )
   }
