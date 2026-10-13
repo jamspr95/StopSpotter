@@ -6,18 +6,15 @@
 // IMPORTANT — READ BEFORE RELYING ON THIS IN PRODUCTION
 // ============================================================================
 // The GML feature/property names this script looks for are written to the
-// INSPIRE Cadastral Parcels schema HMLR's documentation describes, but
-// this was built in a sandboxed environment with no network access to
-// gov.uk — there was no way to download a real file and check the parser
-// against it. The extraction is deliberately TOLERANT (it searches by
-// local element name, ignoring exact namespace prefixes, and tries
-// several plausible property names for the title number) and FAILS LOUDLY
-// (throws, doesn't silently write zero/partial rows) rather than guessing
-// — but "tolerant" isn't the same as "verified". Run with --dry-run
-// against one real downloaded council file first; it logs what it found
-// (feature count, a sample title number, a sample coordinate) without
-// writing anything, specifically so that can be checked before this runs
-// unattended on a schedule. See docs/SETUP.md §15.
+// INSPIRE Cadastral Parcels schema HMLR's documentation describes. This has
+// now been run against the real download page and real council downloads
+// (Oct 2026) and fixed twice already — see git history — but every
+// council hasn't been checked individually, so "tolerant" (it searches by
+// local element name, ignoring exact namespace prefixes, and tries several
+// plausible property names for the title number) and FAILS LOUDLY (throws,
+// doesn't silently write zero/partial rows) still matters. Run with
+// --dry-run against --all (or a good handful of councils) before trusting
+// a scheduled --all run unattended. See docs/SETUP.md §15.
 // ============================================================================
 //
 // Usage:
@@ -27,48 +24,51 @@
 //   node scripts/sync-title-boundaries-ew.mjs --dir=./downloads/ew [--council="Exeter"] [--dry-run]
 //
 // Source: https://use-land-property-data.service.gov.uk/datasets/inspire/download
-// lists one .gml download link per local authority — there's no documented
-// stable URL pattern or API (confirmed: the dataset's own catalogue entry
-// says "API available: No"), so this scrapes that page for links rather
-// than guessing filenames. Confirmed against a real run (Oct 2026): the
-// site isn't behind a login wall as originally suspected — it uses a
-// cookie-walk redirect (a response sets a session cookie and redirects
-// back to the same URL, expecting that cookie on the next request), which
-// Node's plain fetch() can't satisfy on its own and loops forever instead.
-// scripts/lib/httpWithCookies.mjs handles that. --dir stays as a fallback
-// for anything this doesn't fix (a genuine login wall, a page redesign) —
-// download one or more council .gml files yourself in a normal browser,
-// save them into a folder, then point this script at that folder instead
-// of the download page; everything past "get the GML text" works
-// identically either way. See docs/SETUP.md §15.
+// lists a Local Authority table, each row's download link pointing at a
+// .zip (one .gml inside), not a raw .gml as first assumed — confirmed
+// against the real page. The council name is the row's <th>, not the
+// link's own text (which just says "Download .gml"). There's no
+// documented stable URL pattern or API (confirmed: the dataset's own
+// catalogue entry says "API available: No"), so this scrapes the table
+// for links rather than guessing filenames.
 //
-// The actual GML parsing (shared with Scotland's sync script, which
+// The page also uses a cookie-walk redirect (a response sets a session
+// cookie and redirects back to the same URL, expecting that cookie on the
+// next request) rather than a login wall — scripts/lib/httpWithCookies.mjs
+// handles that. --dir stays as a fallback for anything this doesn't fix (a
+// genuine login wall, a page redesign) — download one or more council
+// files yourself in a normal browser (they'll be .zip too), save them into
+// a folder, then point this script at that folder instead of the download
+// page; everything past "get the raw bytes" works identically either way.
+// See docs/SETUP.md §15.
+//
+// The actual GML/zip extraction (shared with Scotland's sync script, which
 // publishes the same INSPIRE Cadastral Parcels schema) lives in
 // scripts/lib/inspireGml.mjs.
 
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { decompressIfGzip, extractParcels } from './lib/inspireGml.mjs'
+import { extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
-const GML_EXTENSIONS = ['.gml', '.gml.gz', '.xml']
+const LOCAL_FILE_EXTENSIONS = ['.gml', '.gml.gz', '.zip', '.xml']
 
-/** A manually-downloaded council file's name, minus whichever GML-ish extension it has. */
-function stripGmlExtension(filename) {
-  const match = GML_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
+/** A manually-downloaded council file's name, minus whichever extension it has. */
+function stripKnownExtension(filename) {
+  const match = LOCAL_FILE_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
   return match ? filename.slice(0, -match.length) : filename
 }
 
 async function findLocalFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true })
-  const files = entries.filter((e) => e.isFile() && GML_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
+  const files = entries.filter((e) => e.isFile() && LOCAL_FILE_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
   if (files.length === 0) {
     throw new Error(
-      `No .gml/.gml.gz/.xml files found in ${dir} — check you saved the downloaded council file(s) there. See docs/SETUP.md §15.`,
+      `No .gml/.gml.gz/.zip/.xml files found in ${dir} — check you saved the downloaded council file(s) there. See docs/SETUP.md §15.`,
     )
   }
-  return files.map((e) => ({ name: stripGmlExtension(e.name), path: join(dir, e.name) }))
+  return files.map((e) => ({ name: stripKnownExtension(e.name), path: join(dir, e.name) }))
 }
 
 const DOWNLOAD_PAGE = 'https://use-land-property-data.service.gov.uk/datasets/inspire/download'
@@ -79,18 +79,20 @@ async function findCouncilLinks() {
   if (!res.ok) throw new Error(`Failed to load the download page (${res.status})`)
   const html = await res.text()
 
-  // Heuristic, not a CSS-selector scrape: any <a href="...gml..."> on the
-  // page, paired with its link text as the council name. Chosen to survive
-  // a page redesign better than exact class/structure matching would —
-  // still just a best-effort scrape of a page that's free to change shape,
-  // which is the whole reason for the MIN_EXPECTED_COUNCILS sanity check
-  // below rather than trusting any count silently.
-  const linkPattern = /<a[^>]+href="([^"]+\.gml[^"]*)"[^>]*>([^<]+)<\/a>/gi
+  // Confirmed against the real page (Oct 2026): each Local Authority is one
+  // table row — a <th scope="row"> holding the council name, followed by a
+  // <td> whose <a href="...zip"> is the download link (its own link text
+  // just says "Download .gml", not the council name). Matching across that
+  // row boundary with a non-greedy [\s\S]*? is a heuristic, not a full HTML
+  // parse, so it's still just a best-effort scrape of a page that's free to
+  // change shape — which is the whole reason for the MIN_EXPECTED_COUNCILS
+  // sanity check below rather than trusting any count silently.
+  const rowPattern = /<th[^>]*scope="row"[^>]*>\s*([^<]+?)\s*<\/th>[\s\S]*?href="([^"]+?\.zip)"/gi
   const links = []
   let match
-  while ((match = linkPattern.exec(html))) {
-    const href = match[1].startsWith('http') ? match[1] : new URL(match[1], DOWNLOAD_PAGE).toString()
-    const name = match[2].replace(/\s+/g, ' ').trim()
+  while ((match = rowPattern.exec(html))) {
+    const name = match[1].replace(/\s+/g, ' ').trim()
+    const href = match[2].startsWith('http') ? match[2] : new URL(match[2], DOWNLOAD_PAGE).toString()
     if (name) links.push({ name, href })
   }
 
@@ -100,38 +102,33 @@ async function findCouncilLinks() {
   // beats a downstream "no council matched X", which looked like the
   // wrong problem (a missing council) when the real one was an empty scrape.
   if (links.length === 0) {
-    // Confirmed live (Oct 2026): the page loads fine (hundreds of KB of real
-    // HTML, not a login/error page) but has zero hrefs containing ".gml" —
-    // the download links must be shaped differently now. Dump enough to
-    // actually fix the regex next time, not just confirm it's broken: every
-    // href on the page (deduplicated, generic <a href="..."> match) plus
-    // the context around the first case-insensitive "gml" mention, if any.
     const allHrefs = [...html.matchAll(/<a[^>]+href="([^"]+)"/gi)].map((m) => m[1])
     const uniqueHrefs = [...new Set(allHrefs)]
-    const gmlIndex = html.search(/gml/i)
+    const zipIndex = html.search(/\.zip/i)
     throw new Error(
       [
-        `Parsed zero council links from the download page (${html.length} bytes of HTML) — the page's structure has changed and this scraper's link regex needs updating, not a stale page.`,
+        `Parsed zero council rows from the download page (${html.length} bytes of HTML) — the page's structure has changed again and this scraper's row regex needs updating, not a stale page.`,
         `Total <a href> tags found: ${allHrefs.length} (${uniqueHrefs.length} unique). Sample hrefs:`,
         ...uniqueHrefs.slice(0, 25).map((h) => `  ${h}`),
-        gmlIndex === -1
-          ? 'No case-insensitive "gml" substring found anywhere in the page at all.'
-          : `First "gml" mention, with context:\n${html.slice(Math.max(0, gmlIndex - 300), gmlIndex + 300)}`,
+        zipIndex === -1
+          ? 'No case-insensitive ".zip" substring found anywhere in the page at all.'
+          : `First ".zip" mention, with context:\n${html.slice(Math.max(0, zipIndex - 400), zipIndex + 100)}`,
       ].join('\n'),
     )
   }
   return links
 }
 
-async function syncOneCouncil(client, name, getText, dryRun) {
+async function syncOneCouncil(client, name, getBytes, dryRun) {
   console.log(`Reading ${name}...`)
-  const gmlText = await getText()
+  const buffer = await getBytes()
+  const gmlTexts = extractGmlTexts(buffer)
 
-  const parcels = extractParcels(gmlText)
-  console.log(`  parsed ${parcels.length} parcels`)
+  const parcels = gmlTexts.flatMap(extractParcels)
+  console.log(`  parsed ${parcels.length} parcels (from ${gmlTexts.length} GML file${gmlTexts.length === 1 ? '' : 's'})`)
   if (parcels.length === 0) {
     throw new Error(
-      `${name}: parsed zero parcels from a non-empty GML file — the parser's assumptions about HMLR's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
+      `${name}: parsed zero parcels from a non-empty download — the parser's assumptions about HMLR's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
     )
   }
   console.log(`  sample: title ${parcels[0].titleNumber}, ${parcels[0].polygons[0].length} points`)
@@ -172,7 +169,7 @@ async function main() {
     console.log(`Found ${files.length} file(s).`)
     targets = files.map(({ name, path }) => ({
       name,
-      getText: async () => decompressIfGzip(await readFile(path)),
+      getBytes: () => readFile(path),
     }))
   } else {
     console.log('Finding council download links...')
@@ -185,10 +182,10 @@ async function main() {
     }
     targets = links.map(({ name, href }) => ({
       name,
-      getText: async () => {
+      getBytes: async () => {
         const res = await fetchWithCookieJar(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
         if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
-        return res.text()
+        return Buffer.from(await res.arrayBuffer())
       },
     }))
   }
@@ -202,9 +199,9 @@ async function main() {
 
   let totalUpserted = 0
   const failures = []
-  for (const { name, getText } of targets) {
+  for (const { name, getBytes } of targets) {
     try {
-      totalUpserted += await syncOneCouncil(client, name, getText, dryRun)
+      totalUpserted += await syncOneCouncil(client, name, getBytes, dryRun)
     } catch (err) {
       console.error(`  FAILED (${name}): ${err.message}`)
       failures.push({ name, error: err.message })

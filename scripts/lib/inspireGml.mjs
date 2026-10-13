@@ -6,6 +6,7 @@
 
 import { gunzipSync } from 'node:zlib'
 import { XMLParser } from 'fast-xml-parser'
+import { unzipSync } from 'fflate'
 import { bngToWgs84 } from './bngToWgs84.mjs'
 
 /** A manually-downloaded file might be gzipped (common for INSPIRE Atom links) or plain — detect by magic bytes, not the file extension, and decompress either way. */
@@ -14,6 +15,36 @@ export function decompressIfGzip(buffer) {
     return gunzipSync(buffer).toString('utf8')
   }
   return buffer.toString('utf8')
+}
+
+function isZip(buffer) {
+  return buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04
+}
+
+const GML_ENTRY_EXTENSIONS = ['.gml', '.xml']
+
+/**
+ * A downloaded file's bytes might be a .zip (confirmed: HMLR's England/
+ * Wales download links are .zip archives containing one .gml each, not
+ * raw .gml as originally assumed — see this repo's git history), gzip, or
+ * plain GML text. Detects by magic bytes, not the file extension or
+ * Content-Type, and returns every GML-ish text found inside — more than
+ * one for a zip with multiple entries, exactly one otherwise.
+ */
+export function extractGmlTexts(buffer) {
+  if (isZip(buffer)) {
+    const entries = unzipSync(buffer)
+    const gmlEntries = Object.entries(entries).filter(([name]) =>
+      GML_ENTRY_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext)),
+    )
+    if (gmlEntries.length === 0) {
+      throw new Error(
+        `Zip archive had no .gml/.xml entry — found: ${Object.keys(entries).join(', ') || '(empty archive)'}.`,
+      )
+    }
+    return gmlEntries.map(([, data]) => Buffer.from(data).toString('utf8'))
+  }
+  return [decompressIfGzip(buffer)]
 }
 
 /** Recursively finds every object in a parsed-XML tree whose tag name (ignoring a namespace prefix) matches `localName`. */

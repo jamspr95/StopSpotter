@@ -22,11 +22,11 @@
 //     both shapes by following any <link type="application/atom+xml">
 //     one level deep automatically — there was no way to confirm which
 //     shape RoS actually uses without fetching it.
-//   - File links are commonly gzip-compressed GML (.gml.gz). This script
-//     detects gzip by magic bytes (not just the file extension) and
-//     decompresses before parsing. A .zip link (a different, also common,
-//     INSPIRE packaging choice) is NOT supported — it throws a clear,
-//     named error instead of mis-parsing a zip archive as XML.
+//   - File links might be gzip-compressed GML (.gml.gz) or a .zip archive
+//     (confirmed this is what HMLR's England/Wales equivalent actually
+//     does — see git history) — scripts/lib/inspireGml.mjs's
+//     extractGmlTexts() detects either by magic bytes, not the file
+//     extension, and unpacks every .gml/.xml entry inside a zip.
 //   - Scotland's Land Register has no HMLR-style "freehold/leasehold"
 //     tenure field, so tenure is always stored as null here — see
 //     0015_title_boundaries.sql.
@@ -51,29 +51,29 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { decompressIfGzip, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
+import { extractGmlTexts, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
 const ATOM_FEED_URL = 'https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx?id=KvuAI9BV6i4~'
 const MIN_EXPECTED_COUNTIES = 25 // Scotland has 33 Registration Counties — fail loudly if far fewer entries were found
 const MAX_FEED_DEPTH = 2 // follow a feed-of-feeds this many levels before giving up rather than looping forever
-const GML_EXTENSIONS = ['.gml', '.gml.gz', '.xml']
+const LOCAL_FILE_EXTENSIONS = ['.gml', '.gml.gz', '.zip', '.xml']
 
-/** A manually-downloaded county file's name, minus whichever GML-ish extension it has. */
-function stripGmlExtension(filename) {
-  const match = GML_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
+/** A manually-downloaded county file's name, minus whichever extension it has. */
+function stripKnownExtension(filename) {
+  const match = LOCAL_FILE_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
   return match ? filename.slice(0, -match.length) : filename
 }
 
 async function findLocalFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true })
-  const files = entries.filter((e) => e.isFile() && GML_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
+  const files = entries.filter((e) => e.isFile() && LOCAL_FILE_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
   if (files.length === 0) {
     throw new Error(
-      `No .gml/.gml.gz/.xml files found in ${dir} — check you saved the downloaded county file(s) there. See docs/SETUP.md §15.`,
+      `No .gml/.gml.gz/.zip/.xml files found in ${dir} — check you saved the downloaded county file(s) there. See docs/SETUP.md §15.`,
     )
   }
-  return files.map((e) => ({ name: stripGmlExtension(e.name), path: join(dir, e.name) }))
+  return files.map((e) => ({ name: stripKnownExtension(e.name), path: join(dir, e.name) }))
 }
 
 async function fetchText(url) {
@@ -122,32 +122,19 @@ async function resolveAtomFeed(url, depth = 0, namePrefix = '') {
   return links
 }
 
-function rejectIfZip(name, buffer) {
-  if (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
-    throw new Error(`${name}: this link is a .zip archive, which this script doesn't unpack. Needs a zip-aware fetch step added.`)
-  }
-}
-
-async function fetchGmlText(name, href) {
+async function fetchBytes(name, href) {
   const res = await fetchWithCookieJar(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
   if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
-  const buffer = Buffer.from(await res.arrayBuffer())
-  rejectIfZip(name, buffer)
-  return decompressIfGzip(buffer)
+  return Buffer.from(await res.arrayBuffer())
 }
 
-async function readLocalGmlText(name, path) {
-  const buffer = await readFile(path)
-  rejectIfZip(name, buffer)
-  return decompressIfGzip(buffer)
-}
-
-async function syncOneCounty(client, name, getText, dryRun) {
+async function syncOneCounty(client, name, getBytes, dryRun) {
   console.log(`Reading ${name}...`)
-  const gmlText = await getText()
+  const buffer = await getBytes()
+  const gmlTexts = extractGmlTexts(buffer)
 
-  const parcels = extractParcels(gmlText)
-  console.log(`  parsed ${parcels.length} parcels`)
+  const parcels = gmlTexts.flatMap(extractParcels)
+  console.log(`  parsed ${parcels.length} parcels (from ${gmlTexts.length} GML file${gmlTexts.length === 1 ? '' : 's'})`)
   if (parcels.length === 0) {
     throw new Error(
       `${name}: parsed zero parcels from a non-empty file — the parser's assumptions about RoS's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
@@ -181,15 +168,15 @@ async function main() {
 
   const client = dryRun ? null : getServiceClient()
 
-  // targets: [{ name, getText }] — getText fetches a live link or reads a
-  // manually-downloaded local file, depending on --dir. Everything past
-  // this point (parsing, upserting, error handling) is identical either way.
+  // targets: [{ name, getBytes }] — getBytes fetches a live link or reads
+  // a manually-downloaded local file, depending on --dir. Everything past
+  // this point (zip/gzip detection, parsing, upserting) is identical either way.
   let targets
   if (dirArg) {
     console.log(`Reading county files from ${dirArg}...`)
     const files = await findLocalFiles(dirArg)
     console.log(`Found ${files.length} file(s).`)
-    targets = files.map(({ name, path }) => ({ name, getText: () => readLocalGmlText(name, path) }))
+    targets = files.map(({ name, path }) => ({ name, getBytes: () => readFile(path) }))
   } else {
     console.log('Resolving the RoS INSPIRE Atom feed...')
     const links = await resolveAtomFeed(ATOM_FEED_URL)
@@ -199,7 +186,7 @@ async function main() {
         `Only found ${links.length} county links, expected ${MIN_EXPECTED_COUNTIES}+ — the feed's structure has likely changed (or needs another level of feed-of-feeds following), or it now requires a browser session the Atom feed can't provide (see docs/SETUP.md §15's --dir fallback) — not a partial run.`,
       )
     }
-    targets = links.map(({ name, href }) => ({ name, getText: () => fetchGmlText(name, href) }))
+    targets = links.map(({ name, href }) => ({ name, getBytes: () => fetchBytes(name, href) }))
   }
 
   if (countyArg) {
@@ -211,9 +198,9 @@ async function main() {
 
   let totalUpserted = 0
   const failures = []
-  for (const { name, getText } of targets) {
+  for (const { name, getBytes } of targets) {
     try {
-      totalUpserted += await syncOneCounty(client, name, getText, dryRun)
+      totalUpserted += await syncOneCounty(client, name, getBytes, dryRun)
     } catch (err) {
       console.error(`  FAILED (${name}): ${err.message}`)
       failures.push({ name, error: err.message })

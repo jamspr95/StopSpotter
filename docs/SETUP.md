@@ -564,15 +564,25 @@ rather than guessing — but "tolerant" isn't "verified". **Run both with
 sample (a parsed title number and point count) before ever relying on the
 scheduled runs.
 
-**Already found and fixed once:** the first real run against HMLR's
-download page failed with `fetch failed` / `redirect count exceeded` —
-not a login wall as originally suspected, but a cookie-walk redirect (a
-response sets a session cookie and redirects back to the same URL,
-expecting that cookie on the next request). `scripts/lib/httpWithCookies.mjs`
-follows redirects manually and carries cookies between hops to handle
-this; both scripts use it for every fetch now. If a run still fails after
-this fix, it's either a genuine login wall `fetchWithCookieJar` can't get
-past, or something new — the error message says which.
+**Already found and fixed twice, against the real site:**
+1. The first real run against HMLR's download page failed with
+   `fetch failed` / `redirect count exceeded` — not a login wall as
+   originally suspected, but a cookie-walk redirect (a response sets a
+   session cookie and redirects back to the same URL, expecting that
+   cookie on the next request). `scripts/lib/httpWithCookies.mjs` follows
+   redirects manually and carries cookies between hops to handle this;
+   both scripts use it for every fetch now.
+2. Once that was fixed, the scrape found zero council links at all — the
+   real download link is a `.zip` (one `.gml` inside), not a raw `.gml`
+   as first assumed, and the council name sits in the table row's
+   heading, not the link's own text (which just says "Download .gml").
+   `scripts/lib/inspireGml.mjs`'s `extractGmlTexts()` now detects a zip
+   by magic bytes and unpacks every `.gml`/`.xml` entry inside it; the
+   EW scraper's row pattern was fixed to match.
+
+If a run still fails after these fixes, it's either a genuine login wall
+`fetchWithCookieJar` can't get past, a page/feed shape change the error
+message's diagnostic dump should make obvious, or something new entirely.
 
 To set it up:
 
@@ -615,13 +625,17 @@ To set it up:
       Create a free account / sign in if it asks you to.
    2. Find one council in the list (anything, for a first test — e.g.
       your own local authority) and click its download link. It saves a
-      `.gml` file (e.g. `Exeter.gml`) to your Downloads folder.
+      `.zip` file (e.g. `Exeter_District_Council.zip`, containing one
+      `.gml` inside) to your Downloads folder — confirmed against the
+      real page; the link's own text just says "Download .gml", but the
+      actual download is a zip.
    3. Inside the cloned repo, create a folder called `downloads/ew` (it's
       already in `.gitignore`, so nothing you put there gets committed)
-      and move that `.gml` file into it:
+      and move that `.zip` file into it — no need to unzip it yourself,
+      the script does that:
       ```bash
       mkdir -p downloads/ew
-      mv ~/Downloads/Exeter.gml downloads/ew/
+      mv ~/Downloads/*.zip downloads/ew/
       ```
    4. From a terminal in the repo folder, run:
       ```bash
@@ -642,9 +656,10 @@ To set it up:
 
    **Scotland** — same idea, different source:
    1. Open <https://ros-inspire.themapcloud.com/> in a browser and
-      download one or more Registration County files (plain `.gml` or
-      gzipped `.gml.gz` — the script accepts either, it checks the file's
-      actual bytes rather than trusting the extension).
+      download one or more Registration County files — plain `.gml`,
+      gzipped `.gml.gz`, or a `.zip` (like England & Wales turned out to
+      use) all work, the script checks the file's actual bytes rather
+      than trusting the extension.
    2. `mkdir -p downloads/scotland` and move the downloaded file(s) there.
    3. `node scripts/sync-title-boundaries-scotland.mjs --dir=downloads/scotland --dry-run`,
       check the sample, then re-run without `--dry-run` (with the same
