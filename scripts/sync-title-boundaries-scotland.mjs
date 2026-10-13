@@ -20,8 +20,16 @@
 //     way, since it's the exact data the UI itself uses.
 //   - The download it triggers is: fetch("/maps/download/ros-cp.cadastralparcel/" + code)
 //     — a GeoServer-shaped path (matches the /maps/wms endpoint also on
-//     this page) — serving a .zip (one .gml inside, confirmed the same
-//     packaging HMLR's England/Wales equivalent uses).
+//     this page) — serving a .zip. Unlike HMLR's England/Wales zip (one
+//     .gml inside), RoS's actually contains an ESRI Shapefile: two
+//     coordinate-system variants (<name>_bng.{shp,shx,dbf,prj} and
+//     <name>_etrs89.{...}). scripts/lib/parcelExtraction.mjs always reads
+//     the "_bng" set, reusing the same BNG->WGS84 pipeline HMLR's GML
+//     uses, via scripts/lib/shapefileParcels.mjs. The .dbf field holding
+//     the title/INSPIRE reference is a tolerant guess (dBASE field names
+//     are commonly truncated to 10 characters) — unconfirmed against a
+//     real file; it fails loudly with the first feature's actual
+//     properties if none of the guesses hit.
 // If the bundle's array shape or the download path ever changes, this
 // fails loudly with a diagnostic (bundle byte count, whether the regex
 // found anything) rather than silently loading nothing. Run --dry-run
@@ -52,7 +60,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { describeGmlStructure, extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
+import { extractParcelsFromBytes } from './lib/parcelExtraction.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
 const DOWNLOAD_PAGE = 'https://ros-inspire.themapcloud.com/'
@@ -125,18 +133,9 @@ async function fetchBytes(name, href) {
 async function syncOneCounty(client, name, getBytes, dryRun) {
   console.log(`Reading ${name}...`)
   const buffer = await getBytes()
-  const gmlTexts = extractGmlTexts(buffer)
+  const parcels = await extractParcelsFromBytes(buffer)
 
-  const parcels = gmlTexts.flatMap(extractParcels)
-  console.log(`  parsed ${parcels.length} parcels (from ${gmlTexts.length} GML file${gmlTexts.length === 1 ? '' : 's'})`)
-  if (parcels.length === 0) {
-    throw new Error(
-      [
-        `${name}: parsed zero parcels from a non-empty file — the parser's assumptions about RoS's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
-        gmlTexts[0] ? describeGmlStructure(gmlTexts[0]) : '(no GML text extracted)',
-      ].join('\n'),
-    )
-  }
+  console.log(`  parsed ${parcels.length} parcels`)
   console.log(`  sample: title ${parcels[0].titleNumber}, ${parcels[0].polygons[0].length} points`)
 
   if (dryRun) return 0
