@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { ThanksBanner } from '../components/ThanksBanner'
-import { GROWTH_OPTION_CROWDFUND, GROWTH_OPTIONS } from '../data/growthOptions'
+import { GROWTH_OPTIONS, GROWTH_OPTIONS_IMMEDIATE } from '../data/growthOptions'
 import { logEvent } from '../lib/analytics'
 import { useAppStore } from '../store/useAppStore'
 
@@ -60,7 +60,7 @@ export function SupportScreen() {
   }
 
   function handleOption(option: string) {
-    if (option === GROWTH_OPTION_CROWDFUND) {
+    if (GROWTH_OPTIONS_IMMEDIATE.includes(option)) {
       if (alreadySignedIn) {
         void submitNow([option])
       } else {

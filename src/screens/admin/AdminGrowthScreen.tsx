@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { GROWTH_OPTION_CROWDFUND } from '../../data/growthOptions'
+import { GROWTH_OPTION_CROWDFUND, GROWTH_OPTIONS_IMMEDIATE } from '../../data/growthOptions'
 import { useAdminStore } from '../../store/useAdminStore'
 
 export function AdminGrowthScreen() {
@@ -61,7 +61,7 @@ export function AdminGrowthScreen() {
                         <span
                           key={option}
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            option === GROWTH_OPTION_CROWDFUND
+                            GROWTH_OPTIONS_IMMEDIATE.includes(option)
                               ? 'bg-amber-100 text-amber-800'
                               : 'bg-brand-50 text-brand-700'
                           }`}
