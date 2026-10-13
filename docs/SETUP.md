@@ -564,6 +564,16 @@ rather than guessing — but "tolerant" isn't "verified". **Run both with
 sample (a parsed title number and point count) before ever relying on the
 scheduled runs.
 
+**Already found and fixed once:** the first real run against HMLR's
+download page failed with `fetch failed` / `redirect count exceeded` —
+not a login wall as originally suspected, but a cookie-walk redirect (a
+response sets a session cookie and redirects back to the same URL,
+expecting that cookie on the next request). `scripts/lib/httpWithCookies.mjs`
+follows redirects manually and carries cookies between hops to handle
+this; both scripts use it for every fetch now. If a run still fails after
+this fix, it's either a genuine login wall `fetchWithCookieJar` can't get
+past, or something new — the error message says which.
+
 To set it up:
 
 1. The two tables/functions are already applied to the live project — no

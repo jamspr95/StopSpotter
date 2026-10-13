@@ -30,15 +30,17 @@
 // lists one .gml download link per local authority — there's no documented
 // stable URL pattern or API (confirmed: the dataset's own catalogue entry
 // says "API available: No"), so this scrapes that page for links rather
-// than guessing filenames. That page may require a free account/sign-in
-// in a browser (unconfirmed from this environment — see docs/SETUP.md
-// §15), which a plain unauthenticated fetch from a GitHub Actions runner
-// can't do anything about. --dir is the fallback for that case, and the
-// recommended way to test this against real data by hand before trusting
-// the live scrape: download one or more council .gml files yourself in a
-// normal browser (signing in if asked), save them into a folder, then
-// point this script at that folder instead of the download page —
-// everything past "get the GML text" works identically either way.
+// than guessing filenames. Confirmed against a real run (Oct 2026): the
+// site isn't behind a login wall as originally suspected — it uses a
+// cookie-walk redirect (a response sets a session cookie and redirects
+// back to the same URL, expecting that cookie on the next request), which
+// Node's plain fetch() can't satisfy on its own and loops forever instead.
+// scripts/lib/httpWithCookies.mjs handles that. --dir stays as a fallback
+// for anything this doesn't fix (a genuine login wall, a page redesign) —
+// download one or more council .gml files yourself in a normal browser,
+// save them into a folder, then point this script at that folder instead
+// of the download page; everything past "get the GML text" works
+// identically either way. See docs/SETUP.md §15.
 //
 // The actual GML parsing (shared with Scotland's sync script, which
 // publishes the same INSPIRE Cadastral Parcels schema) lives in
@@ -46,6 +48,7 @@
 
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
 import { decompressIfGzip, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
@@ -72,7 +75,7 @@ const DOWNLOAD_PAGE = 'https://use-land-property-data.service.gov.uk/datasets/in
 const MIN_EXPECTED_COUNCILS = 300 // England + Wales has ~380 local authorities — fail loudly if the page structure changed and far fewer links were found
 
 async function findCouncilLinks() {
-  const res = await fetch(DOWNLOAD_PAGE, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+  const res = await fetchWithCookieJar(DOWNLOAD_PAGE, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
   if (!res.ok) throw new Error(`Failed to load the download page (${res.status})`)
   const html = await res.text()
 
@@ -156,7 +159,7 @@ async function main() {
     targets = links.map(({ name, href }) => ({
       name,
       getText: async () => {
-        const res = await fetch(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+        const res = await fetchWithCookieJar(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
         if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
         return res.text()
       },

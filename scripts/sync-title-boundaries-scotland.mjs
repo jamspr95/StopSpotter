@@ -50,6 +50,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
+import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
 import { decompressIfGzip, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
@@ -76,7 +77,7 @@ async function findLocalFiles(dir) {
 }
 
 async function fetchText(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+  const res = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
   if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`)
   return res.text()
 }
@@ -128,7 +129,7 @@ function rejectIfZip(name, buffer) {
 }
 
 async function fetchGmlText(name, href) {
-  const res = await fetch(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+  const res = await fetchWithCookieJar(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
   if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
   const buffer = Buffer.from(await res.arrayBuffer())
   rejectIfZip(name, buffer)
