@@ -576,25 +576,78 @@ To set it up:
    plain names, not the `VITE_`-prefixed ones from §4 (those are for the
    client bundle; these are for a server-side script with write access
    RLS doesn't grant anon/authenticated).
-4. **Test against real data first.** From **Actions → Sync England &
-   Wales title boundaries / Sync Scotland title boundaries → Run
-   workflow**, tick **Dry run** and optionally set **Council**/**County**
-   to one small area, then open the run's log and check the sample it
-   printed looks right (a real-looking title number, a sensible point
-   count). Repeat for the other nation. If it throws instead — the error
-   message names what it expected and didn't find — the parser's
-   assumptions about that registry's current file format need updating
-   before this is trusted unattended; this is deliberately the moment
-   that surfaces, not something sitting silently in a cron log.
-5. Once a dry run looks right, run it again without **Dry run** to do a
-   real load, or just leave it — the two scheduled workflows
-   (`.github/workflows/sync-title-boundaries-ew.yml`,
-   `-scotland.yml`) pick it up automatically: monthly for England & Wales
-   (HMLR publishes ~the 6th of each month), quarterly for Scotland
-   (Registers of Scotland's own publish cadence). Both can also always be
-   triggered manually the same way as step 4.
-6. Nothing else to configure — once rows exist, `admin_list_nominations()`
-   starts returning a real `title_number`/`title_tenure` match (or `null`)
-   for every nomination immediately, no redeploy needed, and the admin
+4. **Test against real data first, from the Actions UI.** From **Actions
+   → Sync England & Wales title boundaries / Sync Scotland title
+   boundaries → Run workflow**, tick **Dry run** and optionally set
+   **Council**/**County** to one small area, then open the run's log and
+   check the sample it printed looks right (a real-looking title number,
+   a sensible point count). Repeat for the other nation.
+   - **If that works**, you're done — skip straight to step 6. The
+     scheduled workflow fetches the file live every time, nothing more
+     to download or place anywhere.
+   - **If it throws an error** naming a council-link page or an Atom
+     feed it couldn't parse, that's either a real schema change (the
+     error names what it expected and didn't find) or — unconfirmed from
+     the environment this was built in, since it had no network access
+     to check — HMLR's download page may require a free account/sign-in
+     in a browser, which an unauthenticated fetch from a GitHub Actions
+     runner can't do anything about. Either way, go to step 5.
+
+5. **Fallback: download the file yourself and point the script at it.**
+   This runs on your own computer, not in GitHub Actions — you'll need
+   [Node.js](https://nodejs.org) installed and this repo cloned locally
+   first (`git clone https://github.com/jamspr95/StopSpotter.git`, then
+   `npm install` inside it).
+
+   **England & Wales:**
+   1. In a normal browser, open
+      <https://use-land-property-data.service.gov.uk/datasets/inspire/download>.
+      Create a free account / sign in if it asks you to.
+   2. Find one council in the list (anything, for a first test — e.g.
+      your own local authority) and click its download link. It saves a
+      `.gml` file (e.g. `Exeter.gml`) to your Downloads folder.
+   3. Inside the cloned repo, create a folder called `downloads/ew` (it's
+      already in `.gitignore`, so nothing you put there gets committed)
+      and move that `.gml` file into it:
+      ```bash
+      mkdir -p downloads/ew
+      mv ~/Downloads/Exeter.gml downloads/ew/
+      ```
+   4. From a terminal in the repo folder, run:
+      ```bash
+      node scripts/sync-title-boundaries-ew.mjs --dir=downloads/ew --dry-run
+      ```
+      Check the printed sample (a title number and point count) looks
+      real. Repeat steps 2-4 for more councils if you want, or download
+      all ~380 the same way for a full one-off load — tedious by hand,
+      which is exactly why the scheduled workflow (once it's confirmed
+      working, or fixed) is the real long-term path, not this.
+   5. Once it looks right, run the same command **without** `--dry-run`,
+      with the Supabase secrets set, to actually load it:
+      ```bash
+      SUPABASE_URL=https://xxxxx.supabase.co \
+      SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+        node scripts/sync-title-boundaries-ew.mjs --dir=downloads/ew
+      ```
+
+   **Scotland** — same idea, different source:
+   1. Open <https://ros-inspire.themapcloud.com/> in a browser and
+      download one or more Registration County files (plain `.gml` or
+      gzipped `.gml.gz` — the script accepts either, it checks the file's
+      actual bytes rather than trusting the extension).
+   2. `mkdir -p downloads/scotland` and move the downloaded file(s) there.
+   3. `node scripts/sync-title-boundaries-scotland.mjs --dir=downloads/scotland --dry-run`,
+      check the sample, then re-run without `--dry-run` (with the same
+      two Supabase secrets set) to load it for real.
+
+6. Once rows exist (from either path), `admin_list_nominations()` starts
+   returning a real `title_number`/`title_tenure` match (or `null`) for
+   every nomination immediately, no redeploy needed, and the admin
    dashboard's coverage notice (§ above) stops showing once both nations
-   have at least some data loaded.
+   have at least some data loaded. If the live scheduled workflow
+   (monthly for England & Wales — HMLR publishes ~the 6th of each month —
+   quarterly for Scotland) turned out to need the §5 fallback, it'll keep
+   failing on the same schedule until someone either fixes the scraper/
+   feed parsing for whatever changed, or this becomes a recurring manual
+   job via §5 instead — there's no third thing happening silently in
+   between.

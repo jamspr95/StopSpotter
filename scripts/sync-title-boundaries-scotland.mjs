@@ -39,15 +39,41 @@
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
 //     node scripts/sync-title-boundaries-scotland.mjs --all [--dry-run]
 //   node scripts/sync-title-boundaries-scotland.mjs --county="Lanark" [--dry-run]
+//   node scripts/sync-title-boundaries-scotland.mjs --dir=./downloads/scotland [--county="Lanark"] [--dry-run]
+//
+// --dir is the fallback/manual-verification path, same reasoning as the
+// England/Wales script: download one or more county files yourself in a
+// browser from https://ros-inspire.themapcloud.com/ (or the Atom feed
+// link above), save them into a folder, then point this script at that
+// folder instead of resolving the Atom feed live. See docs/SETUP.md §15.
 
-import { gunzipSync } from 'node:zlib'
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
-import { findByLocalName, extractParcels } from './lib/inspireGml.mjs'
+import { decompressIfGzip, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
 const ATOM_FEED_URL = 'https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx?id=KvuAI9BV6i4~'
 const MIN_EXPECTED_COUNTIES = 25 // Scotland has 33 Registration Counties — fail loudly if far fewer entries were found
 const MAX_FEED_DEPTH = 2 // follow a feed-of-feeds this many levels before giving up rather than looping forever
+const GML_EXTENSIONS = ['.gml', '.gml.gz', '.xml']
+
+/** A manually-downloaded county file's name, minus whichever GML-ish extension it has. */
+function stripGmlExtension(filename) {
+  const match = GML_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
+  return match ? filename.slice(0, -match.length) : filename
+}
+
+async function findLocalFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true })
+  const files = entries.filter((e) => e.isFile() && GML_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
+  if (files.length === 0) {
+    throw new Error(
+      `No .gml/.gml.gz/.xml files found in ${dir} — check you saved the downloaded county file(s) there. See docs/SETUP.md §15.`,
+    )
+  }
+  return files.map((e) => ({ name: stripGmlExtension(e.name), path: join(dir, e.name) }))
+}
 
 async function fetchText(url) {
   const res = await fetch(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
@@ -95,26 +121,29 @@ async function resolveAtomFeed(url, depth = 0, namePrefix = '') {
   return links
 }
 
-function decompressIfGzip(buffer) {
-  if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
-    return gunzipSync(buffer).toString('utf8')
+function rejectIfZip(name, buffer) {
+  if (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
+    throw new Error(`${name}: this link is a .zip archive, which this script doesn't unpack. Needs a zip-aware fetch step added.`)
   }
-  return buffer.toString('utf8')
 }
 
 async function fetchGmlText(name, href) {
   const res = await fetch(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
   if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
   const buffer = Buffer.from(await res.arrayBuffer())
-  if (buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
-    throw new Error(`${name}: this link is a .zip archive, which this script doesn't unpack. Needs a zip-aware fetch step added.`)
-  }
+  rejectIfZip(name, buffer)
   return decompressIfGzip(buffer)
 }
 
-async function syncOneCounty(client, name, href, dryRun) {
-  console.log(`Fetching ${name}...`)
-  const gmlText = await fetchGmlText(name, href)
+async function readLocalGmlText(name, path) {
+  const buffer = await readFile(path)
+  rejectIfZip(name, buffer)
+  return decompressIfGzip(buffer)
+}
+
+async function syncOneCounty(client, name, getText, dryRun) {
+  console.log(`Reading ${name}...`)
+  const gmlText = await getText()
 
   const parcels = extractParcels(gmlText)
   console.log(`  parsed ${parcels.length} parcels`)
@@ -139,34 +168,51 @@ async function main() {
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
   const countyArg = args.find((a) => a.startsWith('--county='))?.split('=')[1]
+  const dirArg = args.find((a) => a.startsWith('--dir='))?.split('=')[1]
   const all = args.includes('--all')
 
-  if (!countyArg && !all) {
-    console.error('Usage: node scripts/sync-title-boundaries-scotland.mjs --all | --county="Name" [--dry-run]')
+  if (!countyArg && !all && !dirArg) {
+    console.error(
+      'Usage: node scripts/sync-title-boundaries-scotland.mjs --all | --county="Name" | --dir="./downloads/scotland" [--county="Name"] [--dry-run]',
+    )
     process.exit(1)
   }
 
   const client = dryRun ? null : getServiceClient()
 
-  console.log('Resolving the RoS INSPIRE Atom feed...')
-  const links = await resolveAtomFeed(ATOM_FEED_URL)
-  console.log(`Found ${links.length} links.`)
-  if (!countyArg && links.length < MIN_EXPECTED_COUNTIES) {
-    throw new Error(
-      `Only found ${links.length} county links, expected ${MIN_EXPECTED_COUNTIES}+ — the feed's structure has likely changed (or needs another level of feed-of-feeds following) and this script needs updating, not a partial run.`,
-    )
+  // targets: [{ name, getText }] — getText fetches a live link or reads a
+  // manually-downloaded local file, depending on --dir. Everything past
+  // this point (parsing, upserting, error handling) is identical either way.
+  let targets
+  if (dirArg) {
+    console.log(`Reading county files from ${dirArg}...`)
+    const files = await findLocalFiles(dirArg)
+    console.log(`Found ${files.length} file(s).`)
+    targets = files.map(({ name, path }) => ({ name, getText: () => readLocalGmlText(name, path) }))
+  } else {
+    console.log('Resolving the RoS INSPIRE Atom feed...')
+    const links = await resolveAtomFeed(ATOM_FEED_URL)
+    console.log(`Found ${links.length} links.`)
+    if (!countyArg && links.length < MIN_EXPECTED_COUNTIES) {
+      throw new Error(
+        `Only found ${links.length} county links, expected ${MIN_EXPECTED_COUNTIES}+ — the feed's structure has likely changed (or needs another level of feed-of-feeds following), or it now requires a browser session the Atom feed can't provide (see docs/SETUP.md §15's --dir fallback) — not a partial run.`,
+      )
+    }
+    targets = links.map(({ name, href }) => ({ name, getText: () => fetchGmlText(name, href) }))
   }
 
-  const targets = countyArg ? links.filter((l) => l.name.toLowerCase().includes(countyArg.toLowerCase())) : links
+  if (countyArg) {
+    targets = targets.filter((t) => t.name.toLowerCase().includes(countyArg.toLowerCase()))
+  }
   if (targets.length === 0) {
-    throw new Error(`No county link matched "${countyArg}".`)
+    throw new Error(`No county matched "${countyArg}".`)
   }
 
   let totalUpserted = 0
   const failures = []
-  for (const { name, href } of targets) {
+  for (const { name, getText } of targets) {
     try {
-      totalUpserted += await syncOneCounty(client, name, href, dryRun)
+      totalUpserted += await syncOneCounty(client, name, getText, dryRun)
     } catch (err) {
       console.error(`  FAILED (${name}): ${err.message}`)
       failures.push({ name, error: err.message })

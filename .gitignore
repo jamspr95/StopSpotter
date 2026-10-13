@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Manually-downloaded HMLR/Registers of Scotland files for
+# scripts/sync-title-boundaries-*.mjs's --dir fallback — see
+# docs/SETUP.md §15. Large, and not something to commit.
+/downloads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

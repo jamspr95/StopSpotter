@@ -4,8 +4,17 @@
 // schema, so the extraction logic is identical — only how each script
 // discovers its list of per-area GML downloads differs.
 
+import { gunzipSync } from 'node:zlib'
 import { XMLParser } from 'fast-xml-parser'
 import { bngToWgs84 } from './bngToWgs84.mjs'
+
+/** A manually-downloaded file might be gzipped (common for INSPIRE Atom links) or plain — detect by magic bytes, not the file extension, and decompress either way. */
+export function decompressIfGzip(buffer) {
+  if (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) {
+    return gunzipSync(buffer).toString('utf8')
+  }
+  return buffer.toString('utf8')
+}
 
 /** Recursively finds every object in a parsed-XML tree whose tag name (ignoring a namespace prefix) matches `localName`. */
 export function findByLocalName(node, localName, results = []) {

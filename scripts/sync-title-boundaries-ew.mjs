@@ -23,20 +23,50 @@
 // Usage:
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
 //     node scripts/sync-title-boundaries-ew.mjs --all [--dry-run]
-//   node scripts/sync-title-boundaries-ew.mjs --council "Exeter" [--dry-run]
+//   node scripts/sync-title-boundaries-ew.mjs --council="Exeter" [--dry-run]
+//   node scripts/sync-title-boundaries-ew.mjs --dir=./downloads/ew [--council="Exeter"] [--dry-run]
 //
 // Source: https://use-land-property-data.service.gov.uk/datasets/inspire/download
 // lists one .gml download link per local authority — there's no documented
 // stable URL pattern or API (confirmed: the dataset's own catalogue entry
 // says "API available: No"), so this scrapes that page for links rather
-// than guessing filenames.
+// than guessing filenames. That page may require a free account/sign-in
+// in a browser (unconfirmed from this environment — see docs/SETUP.md
+// §15), which a plain unauthenticated fetch from a GitHub Actions runner
+// can't do anything about. --dir is the fallback for that case, and the
+// recommended way to test this against real data by hand before trusting
+// the live scrape: download one or more council .gml files yourself in a
+// normal browser (signing in if asked), save them into a folder, then
+// point this script at that folder instead of the download page —
+// everything past "get the GML text" works identically either way.
 //
 // The actual GML parsing (shared with Scotland's sync script, which
 // publishes the same INSPIRE Cadastral Parcels schema) lives in
 // scripts/lib/inspireGml.mjs.
 
-import { extractParcels } from './lib/inspireGml.mjs'
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { decompressIfGzip, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
+
+const GML_EXTENSIONS = ['.gml', '.gml.gz', '.xml']
+
+/** A manually-downloaded council file's name, minus whichever GML-ish extension it has. */
+function stripGmlExtension(filename) {
+  const match = GML_EXTENSIONS.find((ext) => filename.toLowerCase().endsWith(ext))
+  return match ? filename.slice(0, -match.length) : filename
+}
+
+async function findLocalFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true })
+  const files = entries.filter((e) => e.isFile() && GML_EXTENSIONS.some((ext) => e.name.toLowerCase().endsWith(ext)))
+  if (files.length === 0) {
+    throw new Error(
+      `No .gml/.gml.gz/.xml files found in ${dir} — check you saved the downloaded council file(s) there. See docs/SETUP.md §15.`,
+    )
+  }
+  return files.map((e) => ({ name: stripGmlExtension(e.name), path: join(dir, e.name) }))
+}
 
 const DOWNLOAD_PAGE = 'https://use-land-property-data.service.gov.uk/datasets/inspire/download'
 const MIN_EXPECTED_COUNCILS = 300 // England + Wales has ~380 local authorities — fail loudly if the page structure changed and far fewer links were found
@@ -63,11 +93,9 @@ async function findCouncilLinks() {
   return links
 }
 
-async function syncOneCouncil(client, name, href, dryRun) {
-  console.log(`Fetching ${name}...`)
-  const res = await fetch(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
-  if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
-  const gmlText = await res.text()
+async function syncOneCouncil(client, name, getText, dryRun) {
+  console.log(`Reading ${name}...`)
+  const gmlText = await getText()
 
   const parcels = extractParcels(gmlText)
   console.log(`  parsed ${parcels.length} parcels`)
@@ -92,36 +120,61 @@ async function main() {
   const args = process.argv.slice(2)
   const dryRun = args.includes('--dry-run')
   const councilArg = args.find((a) => a.startsWith('--council='))?.split('=')[1]
+  const dirArg = args.find((a) => a.startsWith('--dir='))?.split('=')[1]
   const all = args.includes('--all')
 
-  if (!councilArg && !all) {
-    console.error('Usage: node scripts/sync-title-boundaries-ew.mjs --all | --council="Name" [--dry-run]')
+  if (!councilArg && !all && !dirArg) {
+    console.error(
+      'Usage: node scripts/sync-title-boundaries-ew.mjs --all | --council="Name" | --dir="./downloads/ew" [--council="Name"] [--dry-run]',
+    )
     process.exit(1)
   }
 
   const client = dryRun ? null : getServiceClient()
 
-  console.log('Finding council download links...')
-  const links = await findCouncilLinks()
-  console.log(`Found ${links.length} links.`)
-  if (!councilArg && links.length < MIN_EXPECTED_COUNCILS) {
-    throw new Error(
-      `Only found ${links.length} council links, expected ${MIN_EXPECTED_COUNCILS}+ — the download page's structure has likely changed and this scraper needs updating, not a partial run.`,
-    )
+  // targets: [{ name, getText }] — getText fetches a live link or reads a
+  // manually-downloaded local file, depending on --dir. Everything past
+  // this point (parsing, upserting, error handling) is identical either way.
+  let targets
+  if (dirArg) {
+    console.log(`Reading council files from ${dirArg}...`)
+    const files = await findLocalFiles(dirArg)
+    console.log(`Found ${files.length} file(s).`)
+    targets = files.map(({ name, path }) => ({
+      name,
+      getText: async () => decompressIfGzip(await readFile(path)),
+    }))
+  } else {
+    console.log('Finding council download links...')
+    const links = await findCouncilLinks()
+    console.log(`Found ${links.length} links.`)
+    if (!councilArg && links.length < MIN_EXPECTED_COUNCILS) {
+      throw new Error(
+        `Only found ${links.length} council links, expected ${MIN_EXPECTED_COUNCILS}+ — the download page's structure has likely changed (it may now require signing in — see docs/SETUP.md §15's --dir fallback) and this scraper needs updating, not a partial run.`,
+      )
+    }
+    targets = links.map(({ name, href }) => ({
+      name,
+      getText: async () => {
+        const res = await fetch(href, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+        if (!res.ok) throw new Error(`Failed to fetch ${name} (${res.status})`)
+        return res.text()
+      },
+    }))
   }
 
-  const targets = councilArg
-    ? links.filter((l) => l.name.toLowerCase().includes(councilArg.toLowerCase()))
-    : links
+  if (councilArg) {
+    targets = targets.filter((t) => t.name.toLowerCase().includes(councilArg.toLowerCase()))
+  }
   if (targets.length === 0) {
-    throw new Error(`No council link matched "${councilArg}".`)
+    throw new Error(`No council matched "${councilArg}".`)
   }
 
   let totalUpserted = 0
   const failures = []
-  for (const { name, href } of targets) {
+  for (const { name, getText } of targets) {
     try {
-      totalUpserted += await syncOneCouncil(client, name, href, dryRun)
+      totalUpserted += await syncOneCouncil(client, name, getText, dryRun)
     } catch (err) {
       console.error(`  FAILED (${name}): ${err.message}`)
       failures.push({ name, error: err.message })
