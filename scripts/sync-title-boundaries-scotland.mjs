@@ -51,7 +51,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { XMLParser } from 'fast-xml-parser'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { extractGmlTexts, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
+import { describeGmlStructure, extractGmlTexts, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
 const ATOM_FEED_URL = 'https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx?id=KvuAI9BV6i4~'
@@ -139,8 +139,7 @@ async function syncOneCounty(client, name, getBytes, dryRun) {
     throw new Error(
       [
         `${name}: parsed zero parcels from a non-empty file — the parser's assumptions about RoS's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
-        `First GML file, first 2000 chars:`,
-        gmlTexts[0]?.slice(0, 2000) ?? '(no GML text extracted)',
+        gmlTexts[0] ? describeGmlStructure(gmlTexts[0]) : '(no GML text extracted)',
       ].join('\n'),
     )
   }

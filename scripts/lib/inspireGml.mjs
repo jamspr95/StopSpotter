@@ -47,6 +47,31 @@ export function extractGmlTexts(buffer) {
   return [decompressIfGzip(buffer)]
 }
 
+/**
+ * Diagnostic for "parsed zero parcels from a non-empty file" — a raw text
+ * slice mostly wastes its budget on posList's long digit strings (as the
+ * first real HMLR file confirmed: the schema turned out to use its own
+ * LR:PREDEFINED feature type, not the standard INSPIRE cp:CadastralParcel
+ * this was built against, and that showed up a thousand digits deep into
+ * one coordinate list). This instead lists every unique element name found
+ * (the fastest way to see what the real feature/geometry tags are called)
+ * plus a preview with posList content collapsed, so the rest of a
+ * feature's structure — title/reference fields included — actually fits.
+ */
+export function describeGmlStructure(gmlText) {
+  const tagNames = [...new Set([...gmlText.matchAll(/<([A-Za-z_][\w:.-]*)/g)].map((m) => m[1]))].sort()
+  // (?!\/) excludes the closing </...posList> tag itself — without it, that
+  // tag also matches this pattern (any "<...posList...>" span) and gets a
+  // second, spurious placeholder appended right after it.
+  const redacted = gmlText.replace(/(<(?!\/)[^>]*posList[^>]*>)[^<]*/gi, '$1[coordinates omitted]')
+  return [
+    `Unique element names (${tagNames.length}): ${tagNames.join(', ')}`,
+    '',
+    'Preview with posList coordinates omitted:',
+    redacted.slice(0, 4000),
+  ].join('\n')
+}
+
 /** Recursively finds every object in a parsed-XML tree whose tag name (ignoring a namespace prefix) matches `localName`. */
 export function findByLocalName(node, localName, results = []) {
   if (node == null || typeof node !== 'object') return results

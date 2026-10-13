@@ -49,7 +49,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
+import { describeGmlStructure, extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
 const LOCAL_FILE_EXTENSIONS = ['.gml', '.gml.gz', '.zip', '.xml']
@@ -130,8 +130,7 @@ async function syncOneCouncil(client, name, getBytes, dryRun) {
     throw new Error(
       [
         `${name}: parsed zero parcels from a non-empty download — the parser's assumptions about HMLR's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
-        `First GML file, first 2000 chars:`,
-        gmlTexts[0]?.slice(0, 2000) ?? '(no GML text extracted)',
+        gmlTexts[0] ? describeGmlStructure(gmlTexts[0]) : '(no GML text extracted)',
       ].join('\n'),
     )
   }
