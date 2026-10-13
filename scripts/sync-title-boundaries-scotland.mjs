@@ -6,20 +6,27 @@
 // IMPORTANT — READ BEFORE RELYING ON THIS IN PRODUCTION
 // ============================================================================
 // This originally used an Atom feed at
-// https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx — a
-// live run against it failed with a DNS lookup error (`ENOTFOUND
-// ros.locationcentre.co.uk`), and web search afterwards turned up that
-// domain described as RoS's "older host", with
-// https://ros-inspire.themapcloud.com/ as the current one. This script
-// now scrapes that download page directly instead, the same way (and for
-// the same reason) scripts/sync-title-boundaries-ew.mjs scrapes HMLR's —
-// there's no documented stable URL/API for either. The exact link shape
-// on that page is UNVERIFIED (no network access to check it from the
-// environment this was written in); the scrape is deliberately tolerant
-// and fails loudly with a diagnostic dump (unique hrefs found, a ".zip"/
-// ".gml" context snippet) rather than guessing, mirroring the HMLR fix.
-// Run --dry-run against one real county first and check the logged
-// sample before trusting this on a schedule. See docs/SETUP.md §15.
+// https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx, which
+// turned out to be a dead domain (ENOTFOUND). The current site,
+// https://ros-inspire.themapcloud.com/, is a client-rendered Next.js app
+// (a county-select dropdown + Submit button), not a server-rendered page
+// or a documented API — there's nothing to scrape in its HTML. Confirmed
+// live (Oct 2026) by fetching its JS bundles and reading the minified
+// source directly:
+//   - The county list is a literal array baked into the JS bundle itself:
+//     [{title:"Aberdeen",description:"Aberdeen Cadastral Parcels",code:"ABN"}, ...]
+//     — 33 entries, one per Registration County. This script extracts
+//     that array with a regex rather than re-deriving the list another
+//     way, since it's the exact data the UI itself uses.
+//   - The download it triggers is: fetch("/maps/download/ros-cp.cadastralparcel/" + code)
+//     — a GeoServer-shaped path (matches the /maps/wms endpoint also on
+//     this page) — serving a .zip (one .gml inside, confirmed the same
+//     packaging HMLR's England/Wales equivalent uses).
+// If the bundle's array shape or the download path ever changes, this
+// fails loudly with a diagnostic (bundle byte count, whether the regex
+// found anything) rather than silently loading nothing. Run --dry-run
+// against one real county first and check the logged sample before
+// trusting this on a schedule. See docs/SETUP.md §15.
 // ============================================================================
 //
 // Usage:
@@ -69,85 +76,40 @@ async function findLocalFiles(dir) {
   return files.map((e) => ({ name: stripKnownExtension(e.name), path: join(dir, e.name) }))
 }
 
-/** Any href ending in a file type this script knows how to read — tried in order of how likely each is given HMLR's own equivalent page. */
-const FILE_LINK_PATTERN = /<a[^>]+href="([^"]+\.(?:zip|gml\.gz|gml|xml))"[^>]*>([^<]*)<\/a>/gi
+// The exact literal shape confirmed in the real JS bundle (Oct 2026):
+// {title:"Aberdeen",description:"Aberdeen Cadastral Parcels",code:"ABN"}
+const COUNTY_ARRAY_PATTERN = /\{title:"([^"]+)",description:"[^"]*",code:"([^"]+)"\}/g
+const DOWNLOAD_API_PATH = 'maps/download/ros-cp.cadastralparcel/'
+
+async function fetchText(url) {
+  const res = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+  if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`)
+  return res.text()
+}
 
 async function findCountyLinks() {
-  const res = await fetchWithCookieJar(DOWNLOAD_PAGE, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
-  if (!res.ok) throw new Error(`Failed to load the download page (${res.status})`)
-  const html = await res.text()
+  const html = await fetchText(DOWNLOAD_PAGE)
+  const scriptSrcs = [...new Set([...html.matchAll(/<script[^>]+src="([^"]+)"/gi)].map((m) => m[1]))]
+  const scriptTexts = await Promise.all(
+    scriptSrcs.map(async (src) => {
+      try {
+        return await fetchText(src.startsWith('http') ? src : new URL(src, DOWNLOAD_PAGE).toString())
+      } catch {
+        return ''
+      }
+    }),
+  )
+  const combined = scriptTexts.join('\n')
 
-  const links = []
-  let match
-  while ((match = FILE_LINK_PATTERN.exec(html))) {
-    const href = match[1].startsWith('http') ? match[1] : new URL(match[1], DOWNLOAD_PAGE).toString()
-    // The link text might be the county name (like RoS's own page style)
-    // or generic boilerplate (confirmed that's what HMLR's turned out to
-    // be) — fall back to the filename itself, which is at least unique
-    // and traceable, rather than an empty name.
-    const text = match[2].replace(/\s+/g, ' ').trim()
-    const name = text || decodeURIComponent(href.split('/').pop() || href)
-    links.push({ name, href })
-  }
+  const links = [...combined.matchAll(COUNTY_ARRAY_PATTERN)].map((m) => ({
+    name: m[1],
+    href: new URL(DOWNLOAD_API_PATH + m[2], DOWNLOAD_PAGE).toString(),
+  }))
 
   if (links.length === 0) {
-    // Confirmed live (Oct 2026): this is a client-rendered Next.js app — a
-    // <select> populated via client-side JS, not a server-rendered list —
-    // so the file links never appear in this page's own HTML at all. The
-    // real API it calls has to live in its JS bundles, so fetch every
-    // <script src> found and scan their text for string literals that
-    // look like an API path or a filename, rather than dumping the HTML
-    // (already seen in a prior run's log, see git history) or guessing.
-    const scriptSrcs = [...new Set([...html.matchAll(/<script[^>]+src="([^"]+)"/gi)].map((m) => m[1]))]
-    const scriptTexts = await Promise.all(
-      scriptSrcs.map(async (src) => {
-        try {
-          const url = src.startsWith('http') ? src : new URL(src, DOWNLOAD_PAGE).toString()
-          const r = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
-          return r.ok ? await r.text() : ''
-        } catch {
-          return ''
-        }
-      }),
-    )
-    const combined = scriptTexts.join('\n')
-    const apiLikeStrings = [
-      ...new Set(
-        [...combined.matchAll(/"(\/[a-zA-Z0-9_\-./]*(?:api|download|county|counties|file|zip|gml|csv)[a-zA-Z0-9_\-./]*)"/gi)].map(
-          (m) => m[1],
-        ),
-      ),
-    ]
-    // One found candidate (`/maps/download/ros-cp.cadastralparcel/` — a
-    // GeoServer-shaped path, matching the /maps/wms endpoint also on this
-    // page) is worth a direct, context-free look at: the surrounding JS
-    // for how it's actually called (query params, a county id/name), and
-    // the response from fetching it bare, before concluding anything else.
-    const candidateContexts = apiLikeStrings
-      .filter((s) => s.includes('download'))
-      .map((s) => {
-        const i = combined.indexOf(s)
-        return `Context around "${s}":\n${combined.slice(Math.max(0, i - 300), i + 300)}`
-      })
-    const probeResults = []
-    for (const path of apiLikeStrings.filter((s) => s.includes('download'))) {
-      const url = new URL(path, DOWNLOAD_PAGE).toString()
-      try {
-        const r = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
-        const bodyText = await r.text()
-        probeResults.push(`GET ${url} -> ${r.status} ${r.headers.get('content-type') ?? '(no content-type)'}\n${bodyText.slice(0, 1000)}`)
-      } catch (err) {
-        probeResults.push(`GET ${url} -> threw: ${err.message}`)
-      }
-    }
     throw new Error(
       [
-        `Parsed zero county file links from the download page (${html.length} bytes of HTML) — it's a client-rendered app (a <select> populated by JS), not a server-rendered list, so no file links appear in the page's own HTML.`,
-        `Scanned ${scriptSrcs.length} JS bundle(s) (${combined.length} bytes total) for API-shaped string literals (containing api/download/county/file/zip/gml/csv). Found ${apiLikeStrings.length}:`,
-        ...apiLikeStrings.slice(0, 60).map((s) => `  ${s}`),
-        apiLikeStrings.length === 0 ? '(none found — the real API path may be built dynamically rather than appearing as a literal, needs a browser-based look instead of a text scan)' : '',
-        ...candidateContexts,
-        ...probeResults,
+        `Parsed zero counties out of ${scriptSrcs.length} JS bundle(s) (${combined.length} bytes total) — the embedded county array's shape has changed from the confirmed {title:"...",description:"...",code:"..."} literal, or the page itself has changed. This needs a fresh look (see this script's header comment for how it was found last time), not a guess.`,
       ].join('\n'),
     )
   }
