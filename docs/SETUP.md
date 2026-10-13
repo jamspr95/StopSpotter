@@ -595,17 +595,25 @@ all 50,584 of Exeter City Council's real parcels parsed correctly, each
 with a real title reference and a realistic point count. England & Wales
 can be trusted on the schedule.
 
-**Scotland needed a bigger change.** A live run against the Atom feed
-failed with `ENOTFOUND ros.locationcentre.co.uk` — that domain turned out
-to be RoS's old host; search afterwards confirmed
-`ros-inspire.themapcloud.com` as the current one. The script now scrapes
-that download page directly (the same approach, and the same reason, as
-the England & Wales script scrapes HMLR's), but the exact shape of its
-links is still **unverified against a real page** — run its own
-`--dry-run` test before trusting it on the schedule. Its file/field-name
-shape (zip vs gzip vs plain, a feature type name, a field's real casing —
-the same category of surprise HMLR's turned out to have) is unverified
-too, one layer further in.
+**Scotland needed a bigger change, now also confirmed working end to end.**
+A live run against the Atom feed failed with
+`ENOTFOUND ros.locationcentre.co.uk` — that domain turned out to be RoS's
+old host; search afterwards confirmed `ros-inspire.themapcloud.com` as
+the current one. That site turned out to be a client-rendered app with
+nothing to scrape in its HTML — the real county list (33 entries, one
+per Registration County) and the download URL pattern
+(`maps/download/ros-cp.cadastralparcel/<code>`) were found by fetching
+its JS bundles directly and reading the source. The downloaded `.zip`
+itself turned out to be an **ESRI Shapefile** (two coordinate-system
+variants per county; this always reads the `_bng` one), not GML at all —
+`scripts/lib/shapefileParcels.mjs` (via the `shapefile` npm package) and
+`scripts/lib/parcelExtraction.mjs` (a unified dispatcher that recognises
+either GML or Shapefile inside a zip) handle that.
+
+**Confirmed end to end**, via a live `--county="Lanark" --dry-run` run:
+all 200,011 of Lanark's real parcels parsed correctly, each with a real
+title reference (e.g. `SCT0004276910`). Both nations can now be trusted
+on their schedules.
 
 To set it up:
 
@@ -678,11 +686,12 @@ To set it up:
       ```
 
    **Scotland** — same idea, different source:
-   1. Open <https://ros-inspire.themapcloud.com/> in a browser and
-      download one or more Registration County files — plain `.gml`,
-      gzipped `.gml.gz`, or a `.zip` (like England & Wales turned out to
-      use) all work, the script checks the file's actual bytes rather
-      than trusting the extension.
+   1. Open <https://ros-inspire.themapcloud.com/> in a browser. Pick a
+      county from the **File to Download** dropdown, tick **I accept the
+      Terms and Conditions of Use**, and click **Submit** — it downloads
+      a `.zip` (an ESRI Shapefile inside, confirmed — not GML; the script
+      handles unzipping and reading it, nothing to do with the file
+      yourself beyond saving it).
    2. `mkdir -p downloads/scotland` and move the downloaded file(s) there.
    3. `node scripts/sync-title-boundaries-scotland.mjs --dir=downloads/scotland --dry-run`,
       check the sample, then re-run without `--dry-run` (with the same
