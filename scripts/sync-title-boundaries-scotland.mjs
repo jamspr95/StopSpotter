@@ -5,34 +5,21 @@
 // ============================================================================
 // IMPORTANT — READ BEFORE RELYING ON THIS IN PRODUCTION
 // ============================================================================
-// Built in a sandboxed environment with no network access to ros.gov.uk,
-// locationcentre.co.uk or themapcloud.com — there was no way to fetch a
-// real feed or GML file and check this against it. What follows is
-// confirmed from RoS's own published dataset metadata, not from fetching
-// the feed itself:
-//   - RoS publishes the same EU INSPIRE Cadastral Parcels schema as HMLR's
-//     England/Wales dataset, per Registration County (33 of them), as
-//     either CSV or an ATOM feed. This script uses the ATOM feed so it can
-//     reuse the GML parsing already written and tested for England/Wales
-//     (scripts/lib/inspireGml.mjs) — the CSV route was not built.
-//   - ATOM feed: https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx?id=KvuAI9BV6i4~
-//   - INSPIRE Atom download services are commonly a FEED OF FEEDS (a
-//     top-level feed lists per-dataset feeds, which in turn list the
-//     actual per-county file links) rather than flat. This script handles
-//     both shapes by following any <link type="application/atom+xml">
-//     one level deep automatically — there was no way to confirm which
-//     shape RoS actually uses without fetching it.
-//   - File links might be gzip-compressed GML (.gml.gz) or a .zip archive
-//     (confirmed this is what HMLR's England/Wales equivalent actually
-//     does — see git history) — scripts/lib/inspireGml.mjs's
-//     extractGmlTexts() detects either by magic bytes, not the file
-//     extension, and unpacks every .gml/.xml entry inside a zip.
-//   - Scotland's Land Register has no HMLR-style "freehold/leasehold"
-//     tenure field, so tenure is always stored as null here — see
-//     0015_title_boundaries.sql.
-// As with the England/Wales script: run with --dry-run against one real
-// county first and check the logged sample before trusting this on a
-// schedule. See docs/SETUP.md §15.
+// This originally used an Atom feed at
+// https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx — a
+// live run against it failed with a DNS lookup error (`ENOTFOUND
+// ros.locationcentre.co.uk`), and web search afterwards turned up that
+// domain described as RoS's "older host", with
+// https://ros-inspire.themapcloud.com/ as the current one. This script
+// now scrapes that download page directly instead, the same way (and for
+// the same reason) scripts/sync-title-boundaries-ew.mjs scrapes HMLR's —
+// there's no documented stable URL/API for either. The exact link shape
+// on that page is UNVERIFIED (no network access to check it from the
+// environment this was written in); the scrape is deliberately tolerant
+// and fails loudly with a diagnostic dump (unique hrefs found, a ".zip"/
+// ".gml" context snippet) rather than guessing, mirroring the HMLR fix.
+// Run --dry-run against one real county first and check the logged
+// sample before trusting this on a schedule. See docs/SETUP.md §15.
 // ============================================================================
 //
 // Usage:
@@ -41,22 +28,28 @@
 //   node scripts/sync-title-boundaries-scotland.mjs --county="Lanark" [--dry-run]
 //   node scripts/sync-title-boundaries-scotland.mjs --dir=./downloads/scotland [--county="Lanark"] [--dry-run]
 //
+// File links might be gzip-compressed GML (.gml.gz) or a .zip archive
+// (confirmed this is what HMLR's England/Wales equivalent actually does —
+// see git history) — scripts/lib/inspireGml.mjs's extractGmlTexts()
+// detects either by magic bytes, not the file extension, and unpacks
+// every .gml/.xml entry inside a zip. Scotland's Land Register has no
+// HMLR-style "freehold/leasehold" tenure field, so tenure is always
+// stored as null here — see 0015_title_boundaries.sql.
+//
 // --dir is the fallback/manual-verification path, same reasoning as the
 // England/Wales script: download one or more county files yourself in a
-// browser from https://ros-inspire.themapcloud.com/ (or the Atom feed
-// link above), save them into a folder, then point this script at that
-// folder instead of resolving the Atom feed live. See docs/SETUP.md §15.
+// browser from the download page above, save them into a folder, then
+// point this script at that folder instead of fetching live. See
+// docs/SETUP.md §15.
 
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { XMLParser } from 'fast-xml-parser'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
-import { describeGmlStructure, extractGmlTexts, findByLocalName, extractParcels } from './lib/inspireGml.mjs'
+import { describeGmlStructure, extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
 import { getServiceClient, upsertTitleBoundaries } from './lib/titleBoundariesDb.mjs'
 
-const ATOM_FEED_URL = 'https://ros.locationcentre.co.uk/internet/inspireAtomService.aspx?id=KvuAI9BV6i4~'
+const DOWNLOAD_PAGE = 'https://ros-inspire.themapcloud.com/'
 const MIN_EXPECTED_COUNTIES = 25 // Scotland has 33 Registration Counties — fail loudly if far fewer entries were found
-const MAX_FEED_DEPTH = 2 // follow a feed-of-feeds this many levels before giving up rather than looping forever
 const LOCAL_FILE_EXTENSIONS = ['.gml', '.gml.gz', '.zip', '.xml']
 
 /** A manually-downloaded county file's name, minus whichever extension it has. */
@@ -76,48 +69,41 @@ async function findLocalFiles(dir) {
   return files.map((e) => ({ name: stripKnownExtension(e.name), path: join(dir, e.name) }))
 }
 
-async function fetchText(url) {
-  const res = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
-  if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`)
-  return res.text()
-}
+/** Any href ending in a file type this script knows how to read — tried in order of how likely each is given HMLR's own equivalent page. */
+const FILE_LINK_PATTERN = /<a[^>]+href="([^"]+\.(?:zip|gml\.gz|gml|xml))"[^>]*>([^<]*)<\/a>/gi
 
-function entryTitle(entryNode) {
-  const found = findByLocalName(entryNode, 'title')
-  const t = found[0]
-  return typeof t === 'string' ? t : (t?.['#text'] ?? 'Unnamed entry')
-}
-
-/**
- * Resolves an INSPIRE Atom download feed into a flat list of
- * { name, href } file links, transparently following one level of
- * feed-of-feeds nesting if the top-level feed turns out to list more
- * feeds rather than files directly.
- */
-async function resolveAtomFeed(url, depth = 0, namePrefix = '') {
-  const xml = await fetchText(url)
-  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', textNodeName: '#text' })
-  const doc = parser.parse(xml)
-  const entries = findByLocalName(doc, 'entry')
+async function findCountyLinks() {
+  const res = await fetchWithCookieJar(DOWNLOAD_PAGE, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+  if (!res.ok) throw new Error(`Failed to load the download page (${res.status})`)
+  const html = await res.text()
 
   const links = []
-  for (const entry of entries) {
-    const name = `${namePrefix}${entryTitle(entry)}`
-    for (const link of findByLocalName(entry, 'link')) {
-      const href = link?.['@_href']
-      if (!href) continue
-      const type = link?.['@_type'] ?? ''
-      if (type.includes('atom+xml')) {
-        if (depth >= MAX_FEED_DEPTH) {
-          throw new Error(
-            `Atom feed nesting exceeded ${MAX_FEED_DEPTH} levels at "${name}" — the feed shape is deeper than expected, needs a look.`,
-          )
-        }
-        links.push(...(await resolveAtomFeed(href, depth + 1, `${name} / `)))
-      } else {
-        links.push({ name, href })
-      }
-    }
+  let match
+  while ((match = FILE_LINK_PATTERN.exec(html))) {
+    const href = match[1].startsWith('http') ? match[1] : new URL(match[1], DOWNLOAD_PAGE).toString()
+    // The link text might be the county name (like RoS's own page style)
+    // or generic boilerplate (confirmed that's what HMLR's turned out to
+    // be) — fall back to the filename itself, which is at least unique
+    // and traceable, rather than an empty name.
+    const text = match[2].replace(/\s+/g, ' ').trim()
+    const name = text || decodeURIComponent(href.split('/').pop() || href)
+    links.push({ name, href })
+  }
+
+  if (links.length === 0) {
+    const allHrefs = [...html.matchAll(/<a[^>]+href="([^"]+)"/gi)].map((m) => m[1])
+    const uniqueHrefs = [...new Set(allHrefs)]
+    const hintIndex = html.search(/\.(zip|gml)/i)
+    throw new Error(
+      [
+        `Parsed zero county file links from the download page (${html.length} bytes of HTML) — the page's structure isn't what was assumed and this scraper needs updating, not a stale page.`,
+        `Total <a href> tags found: ${allHrefs.length} (${uniqueHrefs.length} unique). Sample hrefs:`,
+        ...uniqueHrefs.slice(0, 25).map((h) => `  ${h}`),
+        hintIndex === -1
+          ? 'No case-insensitive ".zip"/".gml" substring found anywhere in the page at all.'
+          : `First ".zip"/".gml" mention, with context:\n${html.slice(Math.max(0, hintIndex - 400), hintIndex + 100)}`,
+      ].join('\n'),
+    )
   }
   return links
 }
@@ -181,12 +167,12 @@ async function main() {
     console.log(`Found ${files.length} file(s).`)
     targets = files.map(({ name, path }) => ({ name, getBytes: () => readFile(path) }))
   } else {
-    console.log('Resolving the RoS INSPIRE Atom feed...')
-    const links = await resolveAtomFeed(ATOM_FEED_URL)
+    console.log('Finding county download links...')
+    const links = await findCountyLinks()
     console.log(`Found ${links.length} links.`)
     if (!countyArg && links.length < MIN_EXPECTED_COUNTIES) {
       throw new Error(
-        `Only found ${links.length} county links, expected ${MIN_EXPECTED_COUNTIES}+ — the feed's structure has likely changed (or needs another level of feed-of-feeds following), or it now requires a browser session the Atom feed can't provide (see docs/SETUP.md §15's --dir fallback) — not a partial run.`,
+        `Only found ${links.length} county links, expected ${MIN_EXPECTED_COUNTIES}+ — the download page's structure has likely changed and this scraper needs updating, not a partial run.`,
       )
     }
     targets = links.map(({ name, href }) => ({ name, getBytes: () => fetchBytes(name, href) }))

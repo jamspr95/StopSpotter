@@ -593,11 +593,19 @@ previous one was fixed:**
 **Confirmed end to end**, via a live `--council="Exeter" --dry-run` run:
 all 50,584 of Exeter City Council's real parcels parsed correctly, each
 with a real title reference and a realistic point count. England & Wales
-can be trusted on the schedule. Scotland's Atom feed and file shape are
-still unverified against a real download — the same category of surprise
-(a feature type name, a field's real casing, zip vs gzip vs plain) is
-plausible there too, so run its own `--dry-run` test before trusting it
-the same way.
+can be trusted on the schedule.
+
+**Scotland needed a bigger change.** A live run against the Atom feed
+failed with `ENOTFOUND ros.locationcentre.co.uk` — that domain turned out
+to be RoS's old host; search afterwards confirmed
+`ros-inspire.themapcloud.com` as the current one. The script now scrapes
+that download page directly (the same approach, and the same reason, as
+the England & Wales script scrapes HMLR's), but the exact shape of its
+links is still **unverified against a real page** — run its own
+`--dry-run` test before trusting it on the schedule. Its file/field-name
+shape (zip vs gzip vs plain, a feature type name, a field's real casing —
+the same category of surprise HMLR's turned out to have) is unverified
+too, one layer further in.
 
 To set it up:
 
