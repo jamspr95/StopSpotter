@@ -93,15 +93,23 @@ async function findCountyLinks() {
   if (links.length === 0) {
     const allHrefs = [...html.matchAll(/<a[^>]+href="([^"]+)"/gi)].map((m) => m[1])
     const uniqueHrefs = [...new Set(allHrefs)]
+    const scriptSrcs = [...new Set([...html.matchAll(/<script[^>]+src="([^"]+)"/gi)].map((m) => m[1]))]
     const hintIndex = html.search(/\.(zip|gml)/i)
+    // If this is a client-rendered app (no <a href> links to the actual
+    // files appear in the server HTML at all), the <script> bundle URLs
+    // are the next place to look for the real API/data it calls.
     throw new Error(
       [
         `Parsed zero county file links from the download page (${html.length} bytes of HTML) — the page's structure isn't what was assumed and this scraper needs updating, not a stale page.`,
         `Total <a href> tags found: ${allHrefs.length} (${uniqueHrefs.length} unique). Sample hrefs:`,
         ...uniqueHrefs.slice(0, 25).map((h) => `  ${h}`),
+        `<script src> URLs found (${scriptSrcs.length}):`,
+        ...scriptSrcs.map((s) => `  ${s}`),
         hintIndex === -1
           ? 'No case-insensitive ".zip"/".gml" substring found anywhere in the page at all.'
           : `First ".zip"/".gml" mention, with context:\n${html.slice(Math.max(0, hintIndex - 400), hintIndex + 100)}`,
+        'Full page HTML follows:',
+        html,
       ].join('\n'),
     )
   }
