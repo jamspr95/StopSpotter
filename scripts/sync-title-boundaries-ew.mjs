@@ -93,6 +93,17 @@ async function findCouncilLinks() {
     const name = match[2].replace(/\s+/g, ' ').trim()
     if (name) links.push({ name, href })
   }
+
+  // Confirmed live (Oct 2026): zero links here is always the scraper being
+  // wrong about the page's current shape, never a legitimate "no councils
+  // today" result — throwing with a preview of what was actually fetched
+  // beats a downstream "no council matched X", which looked like the
+  // wrong problem (a missing council) when the real one was an empty scrape.
+  if (links.length === 0) {
+    throw new Error(
+      `Parsed zero council links from the download page (${html.length} bytes of HTML) — the page's structure has changed and this scraper's link regex needs updating, not a stale page. First 1500 chars:\n${html.slice(0, 1500)}`,
+    )
+  }
   return links
 }
 
