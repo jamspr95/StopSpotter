@@ -137,7 +137,11 @@ async function syncOneCounty(client, name, getBytes, dryRun) {
   console.log(`  parsed ${parcels.length} parcels (from ${gmlTexts.length} GML file${gmlTexts.length === 1 ? '' : 's'})`)
   if (parcels.length === 0) {
     throw new Error(
-      `${name}: parsed zero parcels from a non-empty file — the parser's assumptions about RoS's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
+      [
+        `${name}: parsed zero parcels from a non-empty file — the parser's assumptions about RoS's schema are likely wrong for this file. Stopping rather than silently loading nothing. See this script's header comment.`,
+        `First GML file, first 2000 chars:`,
+        gmlTexts[0]?.slice(0, 2000) ?? '(no GML text extracted)',
+      ].join('\n'),
     )
   }
   console.log(`  sample: title ${parcels[0].titleNumber}, ${parcels[0].polygons[0].length} points`)
