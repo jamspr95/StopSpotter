@@ -100,8 +100,24 @@ async function findCouncilLinks() {
   // beats a downstream "no council matched X", which looked like the
   // wrong problem (a missing council) when the real one was an empty scrape.
   if (links.length === 0) {
+    // Confirmed live (Oct 2026): the page loads fine (hundreds of KB of real
+    // HTML, not a login/error page) but has zero hrefs containing ".gml" —
+    // the download links must be shaped differently now. Dump enough to
+    // actually fix the regex next time, not just confirm it's broken: every
+    // href on the page (deduplicated, generic <a href="..."> match) plus
+    // the context around the first case-insensitive "gml" mention, if any.
+    const allHrefs = [...html.matchAll(/<a[^>]+href="([^"]+)"/gi)].map((m) => m[1])
+    const uniqueHrefs = [...new Set(allHrefs)]
+    const gmlIndex = html.search(/gml/i)
     throw new Error(
-      `Parsed zero council links from the download page (${html.length} bytes of HTML) — the page's structure has changed and this scraper's link regex needs updating, not a stale page. First 1500 chars:\n${html.slice(0, 1500)}`,
+      [
+        `Parsed zero council links from the download page (${html.length} bytes of HTML) — the page's structure has changed and this scraper's link regex needs updating, not a stale page.`,
+        `Total <a href> tags found: ${allHrefs.length} (${uniqueHrefs.length} unique). Sample hrefs:`,
+        ...uniqueHrefs.slice(0, 25).map((h) => `  ${h}`),
+        gmlIndex === -1
+          ? 'No case-insensitive "gml" substring found anywhere in the page at all.'
+          : `First "gml" mention, with context:\n${html.slice(Math.max(0, gmlIndex - 300), gmlIndex + 300)}`,
+      ].join('\n'),
     )
   }
   return links
