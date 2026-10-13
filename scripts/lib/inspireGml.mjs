@@ -72,12 +72,21 @@ export function describeGmlStructure(gmlText) {
   ].join('\n')
 }
 
-/** Recursively finds every object in a parsed-XML tree whose tag name (ignoring a namespace prefix) matches `localName`. */
+/**
+ * Recursively finds every object in a parsed-XML tree whose tag name
+ * (ignoring a namespace prefix) matches `localName`, case-insensitively.
+ * Confirmed necessary against a real HMLR download: it uses its own
+ * LR-namespaced, ALL-CAPS element names (LR:PREDEFINED, LR:INSPIREID,
+ * LR:NATIONALCADASTRALREFERENCE, ...) rather than the lower/camelCase
+ * standard INSPIRE Cadastral Parcels names this was built against — a
+ * case-sensitive match found almost none of them.
+ */
 export function findByLocalName(node, localName, results = []) {
   if (node == null || typeof node !== 'object') return results
+  const target = localName.toLowerCase()
   for (const [key, value] of Object.entries(node)) {
     const bareName = key.includes(':') ? key.split(':').pop() : key
-    if (bareName === localName) {
+    if (bareName.toLowerCase() === target) {
       for (const v of Array.isArray(value) ? value : [value]) results.push(v)
     }
     for (const v of Array.isArray(value) ? value : [value]) findByLocalName(v, localName, results)
@@ -85,14 +94,33 @@ export function findByLocalName(node, localName, results = []) {
   return results
 }
 
+// Confirmed against a real HMLR download: the feature type is its own
+// LR:PREDEFINED, not the standard INSPIRE cp:CadastralParcel this was
+// originally built against — kept both since Scotland's real shape is
+// still unverified and might use either.
+const PARCEL_FEATURE_NAMES = ['CadastralParcel', 'PREDEFINED']
+
 const TITLE_NUMBER_KEYS = ['nationalCadastralReference', 'label', 'INSPIREID', 'inspireId', 'title_number', 'TITLE_NO']
+
+// Confirmed against a real HMLR download: LR:INSPIREID's text is a bare
+// number like 63934897, not a string — fast-xml-parser auto-converts
+// purely-numeric element text to a JS number, so a string-only check here
+// silently found nothing for every real title reference.
+function textValue(v) {
+  if (typeof v === 'string') return v.trim() || null
+  if (typeof v === 'number') return String(v)
+  const inner = v?.['#text'] ?? v?.localId
+  if (typeof inner === 'string') return inner.trim() || null
+  if (typeof inner === 'number') return String(inner)
+  return null
+}
 
 function extractTitleNumber(parcelNode) {
   for (const key of TITLE_NUMBER_KEYS) {
     const found = findByLocalName(parcelNode, key)
     for (const v of found) {
-      const text = typeof v === 'string' ? v : (v?.['#text'] ?? v?.localId ?? null)
-      if (typeof text === 'string' && text.trim()) return text.trim()
+      const text = textValue(v)
+      if (text) return text
     }
   }
   return null
@@ -109,11 +137,24 @@ function posListToRing(posListText) {
   return ring
 }
 
-/** Parses one GML document's text into [{ titleNumber, polygons }], polygons each a ring of [lng, lat] pairs. */
+/**
+ * Parses one GML document's text into [{ titleNumber, polygons }], polygons
+ * each a ring of [lng, lat] pairs.
+ *
+ * Known, disclosed gap: every posList found under a parcel (exterior AND
+ * any interior/hole ring alike — confirmed real HMLR files do have
+ * `gml:interior` rings) is treated as its own independent filled ring, not
+ * a polygon-with-a-hole. A parcel with a hole therefore loads as the outer
+ * shape plus an extra filled blob where the hole is, instead of a single
+ * shape with that area cut out — a real but minor fidelity gap against
+ * data that's only ever "indicative extent" to begin with. Fixing it
+ * properly means distinguishing exterior/interior per gml:Polygon and
+ * writing proper polygon-with-holes WKT, which wasn't done here.
+ */
 export function extractParcels(gmlText) {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', textNodeName: '#text' })
   const doc = parser.parse(gmlText)
-  const parcelNodes = findByLocalName(doc, 'CadastralParcel')
+  const parcelNodes = PARCEL_FEATURE_NAMES.flatMap((n) => findByLocalName(doc, n))
   const parcels = []
   for (const node of parcelNodes) {
     const titleNumber = extractTitleNumber(node)
