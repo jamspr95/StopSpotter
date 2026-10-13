@@ -118,12 +118,36 @@ async function findCountyLinks() {
         ),
       ),
     ]
+    // One found candidate (`/maps/download/ros-cp.cadastralparcel/` — a
+    // GeoServer-shaped path, matching the /maps/wms endpoint also on this
+    // page) is worth a direct, context-free look at: the surrounding JS
+    // for how it's actually called (query params, a county id/name), and
+    // the response from fetching it bare, before concluding anything else.
+    const candidateContexts = apiLikeStrings
+      .filter((s) => s.includes('download'))
+      .map((s) => {
+        const i = combined.indexOf(s)
+        return `Context around "${s}":\n${combined.slice(Math.max(0, i - 300), i + 300)}`
+      })
+    const probeResults = []
+    for (const path of apiLikeStrings.filter((s) => s.includes('download'))) {
+      const url = new URL(path, DOWNLOAD_PAGE).toString()
+      try {
+        const r = await fetchWithCookieJar(url, { headers: { 'User-Agent': 'StopSpotter-title-boundary-sync (AireStop)' } })
+        const bodyText = await r.text()
+        probeResults.push(`GET ${url} -> ${r.status} ${r.headers.get('content-type') ?? '(no content-type)'}\n${bodyText.slice(0, 1000)}`)
+      } catch (err) {
+        probeResults.push(`GET ${url} -> threw: ${err.message}`)
+      }
+    }
     throw new Error(
       [
         `Parsed zero county file links from the download page (${html.length} bytes of HTML) — it's a client-rendered app (a <select> populated by JS), not a server-rendered list, so no file links appear in the page's own HTML.`,
         `Scanned ${scriptSrcs.length} JS bundle(s) (${combined.length} bytes total) for API-shaped string literals (containing api/download/county/file/zip/gml/csv). Found ${apiLikeStrings.length}:`,
         ...apiLikeStrings.slice(0, 60).map((s) => `  ${s}`),
         apiLikeStrings.length === 0 ? '(none found — the real API path may be built dynamically rather than appearing as a literal, needs a browser-based look instead of a text scan)' : '',
+        ...candidateContexts,
+        ...probeResults,
       ].join('\n'),
     )
   }
