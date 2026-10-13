@@ -564,7 +564,9 @@ rather than guessing — but "tolerant" isn't "verified". **Run both with
 sample (a parsed title number and point count) before ever relying on the
 scheduled runs.
 
-**Already found and fixed twice, against the real site:**
+**Already found, fixed, and confirmed working against the real England &
+Wales site (Oct 2026) — three real bugs, each only visible once the
+previous one was fixed:**
 1. The first real run against HMLR's download page failed with
    `fetch failed` / `redirect count exceeded` — not a login wall as
    originally suspected, but a cookie-walk redirect (a response sets a
@@ -579,10 +581,23 @@ scheduled runs.
    `scripts/lib/inspireGml.mjs`'s `extractGmlTexts()` now detects a zip
    by magic bytes and unpacks every `.gml`/`.xml` entry inside it; the
    EW scraper's row pattern was fixed to match.
+3. Once that was fixed, a real council's zip unpacked fine but parsed
+   zero parcels — HMLR's actual feature type is its own `LR:PREDEFINED`,
+   not the standard INSPIRE `cp:CadastralParcel` this was built against,
+   its element names are all upper-case (`LR:INSPIREID`,
+   `LR:NATIONALCADASTRALREFERENCE`, ...) where the parser's name-matching
+   was case-sensitive, and the title reference's text parses as a bare
+   JS number (e.g. `63934897`), which the code only handled as a string.
+   All three are fixed in `scripts/lib/inspireGml.mjs`.
 
-If a run still fails after these fixes, it's either a genuine login wall
-`fetchWithCookieJar` can't get past, a page/feed shape change the error
-message's diagnostic dump should make obvious, or something new entirely.
+**Confirmed end to end**, via a live `--council="Exeter" --dry-run` run:
+all 50,584 of Exeter City Council's real parcels parsed correctly, each
+with a real title reference and a realistic point count. England & Wales
+can be trusted on the schedule. Scotland's Atom feed and file shape are
+still unverified against a real download — the same category of surprise
+(a feature type name, a field's real casing, zip vs gzip vs plain) is
+plausible there too, so run its own `--dry-run` test before trusting it
+the same way.
 
 To set it up:
 
