@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir } from 'node:fs/promises'
 import { gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { rm } from 'node:fs/promises'
 import {
-  appendParcelsToTiles,
   cellIdForPoint,
   cellIdsForRings,
   CELL_SIZE_DEG,
   FINE_CELLS_PER_SHARD,
+  finalizeShards,
   shardIdForCellId,
+  writeParcelsToShardParts,
 } from './titleTiles.mjs'
 
 assert.equal(CELL_SIZE_DEG, 0.1)
@@ -61,12 +63,14 @@ const differentShardCellId = `${baseLat + FINE_CELLS_PER_SHARD}_${baseLng}`
 assert.equal(shardIdForCellId(baseCellId), shardIdForCellId(sameShardCellId))
 assert.notEqual(shardIdForCellId(baseCellId), shardIdForCellId(differentShardCellId))
 
-// appendParcelsToTiles: write once, then append a second parcel to a
-// DIFFERENT fine cell that lands in the SAME shard, and confirm both
-// survive as separate keys in one gzipped shard file (no accidental
-// overwrite across fine cells, and no duplicate shard files). Also
-// confirm re-appending the SAME title_number replaces rather than
-// duplicates it within its own fine cell.
+// writeParcelsToShardParts + finalizeShards: write once, then append a
+// second parcel to a DIFFERENT fine cell that lands in the SAME shard, and
+// confirm both survive as separate lines in one finalized gzipped shard
+// file (no accidental overwrite across fine cells, and no duplicate shard
+// files). Unlike the old read-modify-write design, re-sending the same
+// title_number again does NOT replace an earlier line — each call is a
+// pure append, so both lines show up; see titleTiles.mjs's header comment
+// for why the within-run dedup this used to do was dropped as unnecessary.
 const outDir = await mkdtemp(join(tmpdir(), 'title-tiles-test-'))
 try {
   const fineCellIdA = cellIdForPoint(50.715, -3.535) // tinyRing's cell
@@ -84,33 +88,52 @@ try {
 
   const ringB = tinyRing.map(([lng, lat]) => [lng + lngNeighbourOffset * CELL_SIZE_DEG, lat])
 
-  await appendParcelsToTiles(outDir, 'england_wales', [
+  const touchedA = await writeParcelsToShardParts(outDir, 'england_wales', [
     { titleNumber: 'DN1', tenure: 'freehold', polygons: [tinyRing] },
   ])
-  await appendParcelsToTiles(outDir, 'england_wales', [
+  assert.equal(touchedA, 1, 'one parcel in one fine cell should touch exactly one shard')
+
+  const touchedB = await writeParcelsToShardParts(outDir, 'england_wales', [
     { titleNumber: 'DN2', tenure: 'freehold', polygons: [ringB] },
-    // Re-send DN1 with a different tenure value — should replace, not duplicate.
-    { titleNumber: 'DN1', tenure: 'leasehold', polygons: [tinyRing] },
   ])
+  assert.equal(touchedB, 1)
+
+  const shardsFinalized = await finalizeShards(outDir, 'england_wales')
+  assert.equal(shardsFinalized, 1, 'both parcels landed in the same shard, so finalizing should produce exactly one file')
+
+  // The _parts directory should be gone after finalizing.
+  await assert.rejects(readdir(join(outDir, 'england_wales', '_parts')))
 
   const shardId = shardIdForCellId(fineCellIdA)
   const filePath = join(outDir, 'england_wales', `${shardId}.json.gz`)
-  const written = JSON.parse(gunzipSync(await readFile(filePath)).toString('utf8'))
+  const lines = gunzipSync(await readFile(filePath))
+    .toString('utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
 
-  const cellAFeatures = written.cells[fineCellIdA]
-  const cellBFeatures = written.cells[fineCellIdB]
-  assert.equal(cellAFeatures.length, 1, 'DN1 should be the only feature in its own fine cell, not duplicated')
-  assert.equal(cellBFeatures.length, 1, 'DN2 should be in its own fine cell, not merged into cell A')
-  assert.equal(cellAFeatures[0].properties.tenure, 'leasehold', 'DN1 should have been replaced, not duplicated')
-  assert.equal(cellAFeatures[0].geometry.type, 'MultiPolygon')
+  assert.equal(lines.length, 2, 'both features should appear as separate NDJSON lines')
+  const lineA = lines.find((l) => l.properties.title_number === 'DN1')
+  const lineB = lines.find((l) => l.properties.title_number === 'DN2')
+  assert.equal(lineA.c, fineCellIdA)
+  assert.equal(lineB.c, fineCellIdB)
+  assert.equal(lineA.geometry.type, 'MultiPolygon')
+  assert.equal(lineA.properties.tenure, 'freehold')
 
-  // Coordinate rounding: output must differ from the untouched 14-sig-fig
-  // input (confirms rounding actually ran), but only by a tiny amount.
-  const outLng = cellAFeatures[0].geometry.coordinates[0][0][0][0]
-  assert.notEqual(outLng, tinyRing[0][0] + 0.00000000001) // sanity: not comparing against itself
-  assert.ok(Math.abs(outLng - tinyRing[0][0]) < 1e-5, 'rounding should not move a coordinate by more than ~1m')
+  // Coordinate pass-through: confirm the written coordinate is still
+  // (within floating point noise) the original input coordinate.
+  const outLng = lineA.geometry.coordinates[0][0][0][0]
+  assert.ok(Math.abs(outLng - tinyRing[0][0]) < 1e-9)
 
-  console.log('PASS: cell/shard id math is consistent, and appendParcelsToTiles merges/replaces correctly within gzipped shards.')
+  // finalizeShards on a nation with nothing written should no-op rather
+  // than throw (the build scripts always call it, dry-run or not having
+  // already decided not to call it on dry runs, but a nation with zero
+  // parcels anywhere — e.g. Scotland during an --council=... EW-only run
+  // sharing the same outDir — must still be safe to finalize).
+  const shardsFinalizedEmpty = await finalizeShards(outDir, 'scotland')
+  assert.equal(shardsFinalizedEmpty, 0)
+
+  console.log('PASS: cell/shard id math is consistent, and writeParcelsToShardParts/finalizeShards produce correct gzipped NDJSON shards.')
 } finally {
   await rm(outDir, { recursive: true, force: true })
 }

@@ -2,10 +2,14 @@
 // StopSpotter — Scotland title tile BUILD (on-demand lookup design, see
 // docs/TITLE_BOUNDARY_API_PLAN.md). This is sync-title-boundaries-scotland.mjs
 // with its destination swapped: instead of upserting parcels into Postgres,
-// it writes them into small per-tile GeoJSON files via
-// scripts/lib/titleTiles.mjs's appendParcelsToTiles(), which a later
-// workflow step publishes as GitHub Release assets. No Supabase client, no
-// SUPABASE_SERVICE_ROLE_KEY, no Postgres involved anywhere in this script.
+// it writes them into per-shard NDJSON parts files via
+// scripts/lib/titleTiles.mjs's writeParcelsToShardParts() (one call per
+// county, append-only, never read back — see that module's own header
+// comment for the real OOM incident this avoids), then gzips each shard
+// once via finalizeShards() after every county has been processed. A later
+// workflow step publishes the resulting .json.gz files as GitHub Release
+// assets. No Supabase client, no SUPABASE_SERVICE_ROLE_KEY, no Postgres
+// involved anywhere in this script.
 //
 // The county-list JS-bundle scraping and extractParcelsFromBytes shapefile
 // parsing are identical to sync-title-boundaries-scotland.mjs — see that
@@ -27,7 +31,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
 import { extractParcelsFromBytes } from './lib/parcelExtraction.mjs'
-import { appendParcelsToTiles } from './lib/titleTiles.mjs'
+import { finalizeShards, writeParcelsToShardParts } from './lib/titleTiles.mjs'
 
 const DOWNLOAD_PAGE = 'https://ros-inspire.themapcloud.com/'
 const MIN_EXPECTED_COUNTIES = 25 // Scotland has 33 Registration Counties — fail loudly if far fewer entries were found
@@ -112,12 +116,12 @@ async function buildOneCounty(outDir, name, getBytes, dryRun) {
 
   if (dryRun) return 0
 
-  const shardsTouched = await appendParcelsToTiles(
+  const shardsTouched = await writeParcelsToShardParts(
     outDir,
     'scotland',
     parcels.map((p) => ({ titleNumber: p.titleNumber, tenure: null, polygons: p.polygons })),
   )
-  console.log(`  wrote into ${shardsTouched} shard file(s)`)
+  console.log(`  appended into ${shardsTouched} shard part file(s)`)
   return parcels.length
 }
 
@@ -179,6 +183,13 @@ async function main() {
   }
 
   console.log(`Done. ${totalParcels} parcels processed across ${targets.length - failures.length}/${targets.length} counties.`)
+
+  if (!dryRun) {
+    console.log('Finalising shards (gzipping accumulated parts files)...')
+    const shardsFinalized = await finalizeShards(outDir, 'scotland')
+    console.log(`Finalized ${shardsFinalized} shard file(s).`)
+  }
+
   if (failures.length > 0) {
     console.error(`${failures.length} counties failed:`, failures.map((f) => f.name).join(', '))
     process.exit(1)

@@ -3,11 +3,14 @@
 // see docs/TITLE_BOUNDARY_API_PLAN.md). This is sync-title-boundaries-ew.mjs
 // with its destination swapped: instead of upserting parcels into Postgres
 // (which is the bulk-load design that filled the disk and caused the
-// outage this plan replaces), it writes them into small per-tile GeoJSON
-// files via scripts/lib/titleTiles.mjs's appendParcelsToTiles(), which a
-// later workflow step publishes as GitHub Release assets. No Supabase
-// client, no SUPABASE_SERVICE_ROLE_KEY, no Postgres involved anywhere in
-// this script — that's the whole point.
+// outage this plan replaces), it writes them into per-shard NDJSON parts
+// files via scripts/lib/titleTiles.mjs's writeParcelsToShardParts() (one
+// call per council, append-only, never read back — see that module's own
+// header comment for the real OOM incident this avoids), then gzips each
+// shard once via finalizeShards() after every council has been processed.
+// A later workflow step publishes the resulting .json.gz files as GitHub
+// Release assets. No Supabase client, no SUPABASE_SERVICE_ROLE_KEY, no
+// Postgres involved anywhere in this script — that's the whole point.
 //
 // Every download-scraping and GML-parsing concern (the HMLR download page's
 // table-row scrape, the cookie-walk, the zip/GML extraction, the LR:*
@@ -29,7 +32,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fetchWithCookieJar } from './lib/httpWithCookies.mjs'
 import { describeGmlStructure, extractGmlTexts, extractParcels } from './lib/inspireGml.mjs'
-import { appendParcelsToTiles } from './lib/titleTiles.mjs'
+import { finalizeShards, writeParcelsToShardParts } from './lib/titleTiles.mjs'
 
 const LOCAL_FILE_EXTENSIONS = ['.gml', '.gml.gz', '.zip', '.xml']
 const DEFAULT_OUT_DIR = './title-tiles-build'
@@ -108,12 +111,12 @@ async function buildOneCouncil(outDir, name, getBytes, dryRun) {
 
   if (dryRun) return 0
 
-  const shardsTouched = await appendParcelsToTiles(
+  const shardsTouched = await writeParcelsToShardParts(
     outDir,
     'england_wales',
     parcels.map((p) => ({ titleNumber: p.titleNumber, tenure: 'freehold', polygons: p.polygons })),
   )
-  console.log(`  wrote into ${shardsTouched} shard file(s)`)
+  console.log(`  appended into ${shardsTouched} shard part file(s)`)
   return parcels.length
 }
 
@@ -185,6 +188,13 @@ async function main() {
   }
 
   console.log(`Done. ${totalParcels} parcels processed across ${targets.length - failures.length}/${targets.length} councils.`)
+
+  if (!dryRun) {
+    console.log('Finalising shards (gzipping accumulated parts files)...')
+    const shardsFinalized = await finalizeShards(outDir, 'england_wales')
+    console.log(`Finalized ${shardsFinalized} shard file(s).`)
+  }
+
   if (failures.length > 0) {
     console.error(`${failures.length} councils failed:`, failures.map((f) => f.name).join(', '))
     process.exit(1)

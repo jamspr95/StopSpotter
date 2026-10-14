@@ -44,17 +44,25 @@ function shardIdForCellId(cellId: string): string {
 const RELEASE_TAG = 'title-tiles-latest'
 const TILE_BASE_URL = `https://github.com/jamspr95/StopSpotter/releases/download/${RELEASE_TAG}`
 
-interface TitleFeature {
+interface TitleTileLine {
+  c: string
   type: 'Feature'
   properties: { title_number: string; tenure: string | null }
   geometry: { type: 'MultiPolygon'; coordinates: number[][][][] }
 }
 
+type TitleFeature = Omit<TitleTileLine, 'c'>
+
 // Each release asset is a gzipped shard covering FINE_CELLS_PER_SHARD^2
-// fine cells, shaped `{ cells: { "<fineCellId>": TitleFeature[] } }` (see
-// scripts/lib/titleTiles.mjs's appendParcelsToTiles) — fetching one shard
-// and indexing straight into its own fine cell means this never scans
-// parcels from neighbouring fine cells just because they share a shard.
+// fine cells, written as newline-delimited JSON — one line per feature
+// per fine cell it belongs to, each line carrying its own fine cell id
+// ("c") — see scripts/lib/titleTiles.mjs's writeParcelsToShardParts/
+// finalizeShards. There's no top-level index structure, so this filters
+// to the one fine cell actually asked for as it streams the lines; a
+// shard is small enough (FINE_CELLS_PER_SHARD^2 fine cells' worth) that
+// reading the whole decompressed text at once is fine — the real OOM
+// incident this format replaced was the BUILD side re-reading an
+// ever-growing shard on every council touch, not a one-off fetch here.
 async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): Promise<TitleFeature[]> {
   const shardId = shardIdForCellId(cellId)
   const res = await fetch(`${TILE_BASE_URL}/${nation}_${shardId}.json.gz`)
@@ -62,8 +70,15 @@ async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): 
   if (!res.ok) throw new Error(`Failed to fetch shard ${nation}/${shardId}: ${res.status}`)
   if (!res.body) return []
   const decompressed = res.body.pipeThrough(new DecompressionStream('gzip'))
-  const body = JSON.parse(await new Response(decompressed).text())
-  return body.cells?.[cellId] ?? []
+  const text = await new Response(decompressed).text()
+  const features: TitleFeature[] = []
+  for (const line of text.split('\n')) {
+    if (!line) continue
+    const parsed: TitleTileLine = JSON.parse(line)
+    if (parsed.c !== cellId) continue
+    features.push({ type: parsed.type, properties: parsed.properties, geometry: parsed.geometry })
+  }
+  return features
 }
 
 /** Plain ray-casting point-in-polygon, ring = [[lng, lat], ...]. */
@@ -83,7 +98,7 @@ function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
 function findMatch(lng: number, lat: number, features: TitleFeature[]): TitleFeature | null {
   for (const feature of features) {
     // Each MultiPolygon member here is always a single ring (no holes) —
-    // see scripts/lib/titleTiles.mjs's appendParcelsToTiles.
+    // see scripts/lib/titleTiles.mjs's writeParcelsToShardParts.
     for (const member of feature.geometry.coordinates) {
       if (pointInRing(lng, lat, member[0])) return feature
     }
