@@ -32,9 +32,10 @@ import type { AdminNomination } from '../types'
  *    owns it outright, is itself a real ownership signal even without a
  *    SiteFinder scan).
  *
- * On top of those three, a small flat NO_KNOWN_OWNER_BOOST applies when
- * supabase/migrations/0015_title_boundaries.sql's bulk title lookup found
- * no matching registered title at this exact location. "No known owner"
+ * On top of those three, a small flat NO_KNOWN_OWNER_BOOST applies once
+ * an admin's on-demand title lookup (supabase/migrations/0017_title_lookup_columns.sql,
+ * docs/TITLE_BOUNDARY_API_PLAN.md) has actually run for this nomination
+ * and found no matching registered title at this exact location. "No known owner"
  * isn't a caveat here — it's a business-positive signal: no registered
  * title at the pin means no landowner to find and negotiate a lease with,
  * so a site that gets through this way keeps ~100% margin instead of
@@ -51,7 +52,13 @@ export function computePriorityScore(n: AdminNomination): number {
 const NO_KNOWN_OWNER_BOOST = 0.15
 
 function noKnownOwnerBoost(n: AdminNomination): number {
-  return n.titleNumber == null ? NO_KNOWN_OWNER_BOOST : 0
+  // titleCheckedAt null means "never looked up", not "no known owner" —
+  // under the old bulk-sync design titleNumber alone was a safe proxy for
+  // "checked, no match", but the on-demand lookup leaves most nominations
+  // unchecked by default, so titleNumber == null on its own would wrongly
+  // boost every not-yet-looked-up nomination instead of just confirmed
+  // no-known-owner ones.
+  return n.titleCheckedAt != null && n.titleNumber == null ? NO_KNOWN_OWNER_BOOST : 0
 }
 
 function normalizedCriteriaScore(score: number): number {

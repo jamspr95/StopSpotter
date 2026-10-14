@@ -531,24 +531,87 @@ places API, not a code change here.
 
 ## 15. Title boundary data — "no known owner" sites (optional, Milestone 3)
 
-[`supabase/migrations/0015_title_boundaries.sql`](../supabase/migrations/0015_title_boundaries.sql)
-and [`0016_title_boundary_coverage.sql`](../supabase/migrations/0016_title_boundary_coverage.sql)
-add a `title_boundaries` table that's checked against every nomination's
-exact location: a match means "a registered title exists roughly here"
-(HM Land Registry for England & Wales, Registers of Scotland for
-Scotland); no match is labelled **"no known owner"** everywhere in the
-admin UI, never "unowned" — England & Wales alone has an estimated
-10-14% of land still unregistered (HMLR's own published figures),
-overwhelmingly older rural land, which is exactly the kind of land
-StopSpotter's nominations skew toward. "No known owner" is treated as a
-*positive* signal in `src/lib/priority.ts`'s admin sort — no registered
-title means no landowner to negotiate a lease with, so a site that gets
-through this way keeps close to 100% margin.
+**This section was rewritten after a real production outage.** The
+original design (below this note, for the history) loaded HM Land
+Registry's and Registers of Scotland's *entire* national bulk datasets
+into a Postgres table (`title_boundaries`), checked against every
+nomination via a join. On the Free plan, that filled the database's
+entire disk allocation mid-sync and took the whole project offline —
+not just the title feature, everything, since Postgres itself couldn't
+accept new connections once disk hit zero. See
+[`docs/TITLE_BOUNDARY_API_PLAN.md`](TITLE_BOUNDARY_API_PLAN.md) for the
+full incident writeup and the replacement design.
 
-The table starts empty, same as `council_boundaries` in §7 — nothing
-breaks by skipping this, every nomination just shows "no known owner"
-until it's loaded (the admin dashboard's coverage notice says so plainly
-rather than letting that look like a real result).
+**The current design** resolves a title **on demand, per nomination**,
+instead of pre-loading the whole country:
+
+- A quarterly (or manually-triggered) GitHub Actions workflow,
+  [`.github/workflows/build-title-tiles.yml`](../.github/workflows/build-title-tiles.yml),
+  downloads the same free HMLR/RoS bulk files as the original design did,
+  but instead of upserting into Postgres, splits them into thousands of
+  small per-area GeoJSON files ("tiles") and publishes them as assets on
+  a GitHub Release tagged `title-tiles-latest` — **nothing is ever
+  written to the database by this job**, so it can never repeat the
+  disk-exhaustion failure.
+- `supabase/functions/lookup-title-boundary` — a Supabase Edge Function —
+  fetches just the *one* tile a nomination's coordinates fall in, checks
+  it against that nomination's exact point, and returns a match or
+  `null`. It's called from the admin dashboard's **"Look up title"**
+  button (`AdminStopDetailScreen`), not automatically for every
+  nomination.
+- `nominations.title_number` / `.title_tenure` / `.title_checked_at`
+  (`supabase/migrations/0017_title_lookup_columns.sql`) store the single
+  resolved result once an admin actually runs the lookup. `title_checked_at`
+  being `null` means "never looked up" — genuinely different from
+  "looked up, no match found" (`title_number` null but `title_checked_at`
+  set), which is what **"no known owner"** actually means in the admin
+  UI. England & Wales alone has an estimated 10-14% of land still
+  unregistered (HMLR's own published figures), overwhelmingly older rural
+  land — exactly the kind of land StopSpotter's nominations skew toward,
+  so this is a common, real, and genuinely useful signal (treated as
+  *positive* in `src/lib/priority.ts`'s admin sort: no registered title
+  means no landowner to negotiate a lease with), not an edge case or a
+  failure.
+
+Nothing breaks by never running the lookup for a given nomination — it
+just shows "title not looked up yet" until an admin clicks the button.
+
+### Setting it up
+
+1. The schema (`0017_title_lookup_columns.sql`) and the Edge Function are
+   already applied/deployed to the live project — no manual step needed
+   for either.
+2. The `build-title-tiles.yml` workflow needs no Supabase secrets at all
+   (it never touches the database) — just GitHub's own built-in token,
+   already available to every workflow.
+3. **Before trusting the schedule, run it once by hand**: Actions →
+   "Build title boundary tiles" → Run workflow, optionally scoped to one
+   council/county first via its `council`/`county` input (same shape as
+   the old sync workflows). Check the run's log for a sensible parsed
+   parcel count, then check the `title-tiles-latest` release (repo's
+   **Releases** page) actually has fresh assets attached.
+4. Once that release exists, click **"Look up title"** on any
+   nomination's admin detail page — it should return a result (a title
+   number, or a genuine "no known owner") within a second or two.
+
+### The original bulk-sync design, for history
+
+The paragraphs and setup steps below describe
+`scripts/sync-title-boundaries-{ew,scotland}.mjs` and the `title_boundaries`
+table they fed — **retired**, per the incident above, but kept here
+because the real-world parsing findings (the exact HMLR schema quirks,
+the Registers of Scotland domain change, the confirmed real parcel
+counts) came from hard-won live debugging against the real sources, and
+the new `build-title-tiles-{ew,scotland}.mjs` scripts reuse that same
+proven parsing code (`scripts/lib/inspireGml.mjs`, `parcelExtraction.mjs`,
+`shapefileParcels.mjs`, `httpWithCookies.mjs`) unchanged — only what
+happens to each parsed parcel afterwards (written to a tile file, not
+upserted into Postgres) is different. Nothing below should be treated as
+instructions to actually run any more; `title_boundaries` itself and
+`admin_title_boundary_coverage()` were renamed to `_retired` (not
+dropped — `DROP TABLE`/`DROP FUNCTION` both hung against this project,
+same as a few migrations before it) and are inert, unreachable dead
+schema now.
 
 **Read this before trusting it on a schedule:** the two sync scripts
 (`scripts/sync-title-boundaries-ew.mjs`, `scripts/sync-title-boundaries-scotland.mjs`)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { NoKnownOwnerBadge, TitleCoverageNotice } from '../../components/TitleBoundary'
+import { NoKnownOwnerBadge } from '../../components/TitleBoundary'
 import { formatEnumLabel, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER } from '../../lib/labels'
 import { computePriorityScore } from '../../lib/priority'
 import { useAdminStore } from '../../store/useAdminStore'
@@ -11,7 +11,6 @@ type SortKey = 'created_desc' | 'votes_desc' | 'score_desc' | 'priority_desc'
 export function AdminStopsScreen() {
   const navigate = useNavigate()
   const nominations = useAdminStore((s) => s.nominations)
-  const titleBoundaryCoverage = useAdminStore((s) => s.titleBoundaryCoverage)
   const loading = useAdminStore((s) => s.nominationsLoading)
   const error = useAdminStore((s) => s.error)
   const loadNominations = useAdminStore((s) => s.loadNominations)
@@ -62,7 +61,6 @@ export function AdminStopsScreen() {
     <div>
       <h2 className="font-display text-lg font-semibold text-slate-900">Stops</h2>
       <p className="mt-1 text-sm text-slate-500">{filtered.length} of {nominations.length} stops</p>
-      <TitleCoverageNotice coverage={titleBoundaryCoverage} />
 
       <div className="mt-4 flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm">
         <div className="min-w-[45%] flex-1 sm:min-w-[140px] sm:flex-none">

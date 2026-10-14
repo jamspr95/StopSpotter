@@ -15,7 +15,6 @@ import type {
   NominationAnswers,
   NominationStatus,
   PayBand,
-  TitleBoundaryCoverage,
   Vote,
 } from '../types'
 
@@ -532,6 +531,7 @@ interface AdminNominationRow {
   coast_distance_m: number | null
   title_number: string | null
   title_tenure: string | null
+  title_checked_at: string | null
 }
 
 export async function adminListNominations(): Promise<AdminNomination[]> {
@@ -577,23 +577,39 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     coastDistanceM: row.coast_distance_m,
     titleNumber: row.title_number,
     titleTenure: row.title_tenure,
+    titleCheckedAt: row.title_checked_at,
   }))
 }
 
-interface TitleBoundaryCoverageRow {
-  nation: 'england_wales' | 'scotland'
-  row_count: number
-  last_synced_at: string | null
-}
+/**
+ * Looks up the registered title at a nomination's exact location (the
+ * lookup-title-boundary Edge Function, backed by the pre-built GitHub
+ * Release tiles — see docs/TITLE_BOUNDARY_API_PLAN.md) and saves the
+ * result via admin_set_nomination_title. Replaces the old bulk
+ * title_boundaries join entirely: this is an on-demand, per-nomination
+ * call an admin triggers (AdminStopDetailScreen's "Look up title"
+ * button), not something that runs automatically for every nomination.
+ */
+export async function lookupNominationTitle(
+  nominationId: string,
+  lat: number,
+  lng: number,
+): Promise<{ titleNumber: string | null; titleTenure: string | null }> {
+  const { data: fnResult, error: fnError } = await client().functions.invoke<{
+    titleNumber: string | null
+    tenure: string | null
+  }>('lookup-title-boundary', { body: { lat, lng } })
+  if (fnError) throw fnError
+  if (!fnResult) throw new Error('Title lookup returned no result.')
 
-export async function adminTitleBoundaryCoverage(): Promise<TitleBoundaryCoverage[]> {
-  const { data, error } = await client().rpc('admin_title_boundary_coverage')
-  if (error) throw error
-  return (data as TitleBoundaryCoverageRow[]).map((row) => ({
-    nation: row.nation,
-    rowCount: row.row_count,
-    lastSyncedAt: row.last_synced_at,
-  }))
+  const { error: rpcError } = await client().rpc('admin_set_nomination_title', {
+    p_nomination_id: nominationId,
+    p_title_number: fnResult.titleNumber,
+    p_title_tenure: fnResult.tenure,
+  })
+  if (rpcError) throw rpcError
+
+  return { titleNumber: fnResult.titleNumber, titleTenure: fnResult.tenure }
 }
 
 export async function adminUpdateNominationStatus(

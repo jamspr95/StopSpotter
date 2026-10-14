@@ -6,7 +6,6 @@ import type {
   AdminModerationReport,
   AdminNomination,
   NominationStatus,
-  TitleBoundaryCoverage,
 } from '../types'
 
 export type AdminSessionStatus = 'checking' | 'signed_out' | 'not_admin' | 'admin'
@@ -16,11 +15,7 @@ interface AdminState {
   adminEmail: string | null
   nominations: AdminNomination[]
   nominationsLoading: boolean
-  // Loaded once alongside nominations, not per-row — it answers "has this
-  // nation's title data ever been loaded at all" (see
-  // 0016_title_boundary_coverage.sql), which doesn't vary nomination to
-  // nomination. Empty until loadNominations's first successful run.
-  titleBoundaryCoverage: TitleBoundaryCoverage[]
+  titleLookupLoadingId: string | null
   moderationReports: AdminModerationReport[]
   moderationLoading: boolean
   growthFeedback: AdminGrowthFeedback[]
@@ -38,6 +33,7 @@ interface AdminState {
     note?: string,
   ) => Promise<void>
   resolveModerationReport: (reportId: string) => Promise<void>
+  lookupNominationTitle: (nominationId: string) => Promise<void>
   loadGrowthFeedback: () => Promise<void>
   updateGrowthFeedback: (
     id: string,
@@ -50,7 +46,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   adminEmail: null,
   nominations: [],
   nominationsLoading: false,
-  titleBoundaryCoverage: [],
+  titleLookupLoadingId: null,
   moderationReports: [],
   moderationLoading: false,
   growthFeedback: [],
@@ -97,7 +93,6 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       sessionStatus: 'signed_out',
       adminEmail: null,
       nominations: [],
-      titleBoundaryCoverage: [],
       moderationReports: [],
       growthFeedback: [],
     })
@@ -106,11 +101,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   loadNominations: async () => {
     set({ nominationsLoading: true, error: null })
     try {
-      const [nominations, titleBoundaryCoverage] = await Promise.all([
-        db.adminListNominations(),
-        db.adminTitleBoundaryCoverage(),
-      ])
-      set({ nominations, titleBoundaryCoverage, nominationsLoading: false })
+      const nominations = await db.adminListNominations()
+      set({ nominations, nominationsLoading: false })
     } catch (err) {
       set({
         nominationsLoading: false,
@@ -144,6 +136,32 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     set((s) => ({
       moderationReports: s.moderationReports.filter((r) => r.id !== reportId),
     }))
+  },
+
+  lookupNominationTitle: async (nominationId) => {
+    const nomination = get().nominations.find((n) => n.id === nominationId)
+    if (!nomination) return
+    set({ titleLookupLoadingId: nominationId, error: null })
+    try {
+      const { titleNumber, titleTenure } = await db.lookupNominationTitle(
+        nominationId,
+        nomination.exact.lat,
+        nomination.exact.lng,
+      )
+      set((s) => ({
+        titleLookupLoadingId: null,
+        nominations: s.nominations.map((n) =>
+          n.id === nominationId
+            ? { ...n, titleNumber, titleTenure, titleCheckedAt: new Date().toISOString() }
+            : n,
+        ),
+      }))
+    } catch (err) {
+      set({
+        titleLookupLoadingId: null,
+        error: err instanceof Error ? err.message : 'Title lookup failed.',
+      })
+    }
   },
 
   loadGrowthFeedback: async () => {
