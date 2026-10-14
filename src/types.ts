@@ -159,7 +159,7 @@ export interface AdminNomination {
   titleGeometry: TitleGeometry | null
 }
 
-/** Shape lookup-title-boundary's Edge Function returns — always a single-ring-per-member MultiPolygon, see scripts/lib/titleTiles.mjs. */
+/** Shape lookup-title-boundary's Edge Function returns — always a single-ring-per-member MultiPolygon, see jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs. */
 export interface TitleGeometry {
   type: 'MultiPolygon'
   coordinates: number[][][][]

@@ -545,14 +545,17 @@ full incident writeup and the replacement design.
 **The current design** resolves a title **on demand, per nomination**,
 instead of pre-loading the whole country:
 
-- A quarterly (or manually-triggered) GitHub Actions workflow,
-  [`.github/workflows/build-title-tiles.yml`](../.github/workflows/build-title-tiles.yml),
-  downloads the same free HMLR/RoS bulk files as the original design did,
-  but instead of upserting into Postgres, splits them into thousands of
-  small per-area GeoJSON files ("tiles") and publishes them as assets on
-  a GitHub Release tagged `title-tiles-latest` — **nothing is ever
-  written to the database by this job**, so it can never repeat the
-  disk-exhaustion failure.
+- A quarterly (or manually-triggered) GitHub Actions workflow in the
+  separate [`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles)
+  repo — **not this one**, split out in Oct 2026 so this build pipeline
+  can stay public (and its Actions minutes free, and its release assets
+  fetchable with a plain unauthenticated `fetch()`) once this app repo
+  goes private; see that repo's README — downloads the same free HMLR/RoS
+  bulk files as the original design did, but instead of upserting into
+  Postgres, splits them into gzipped NDJSON shard files ("tiles") and
+  publishes them as assets on a GitHub Release tagged `title-tiles-latest`
+  — **nothing is ever written to the database by this job**, so it can
+  never repeat the disk-exhaustion failure.
 - `supabase/functions/lookup-title-boundary` — a Supabase Edge Function —
   fetches just the *one* tile a nomination's coordinates fall in, checks
   it against that nomination's exact point, and returns a match or
@@ -581,69 +584,52 @@ just shows "title not looked up yet" until an admin clicks the button.
 1. The schema (`0017_title_lookup_columns.sql`) and the Edge Function are
    already applied/deployed to the live project — no manual step needed
    for either.
-2. The `build-title-tiles.yml` workflow needs no Supabase secrets at all
-   (it never touches the database) — just GitHub's own built-in token,
-   already available to every workflow.
-3. **Before trusting the schedule, run it once by hand**: Actions →
-   "Build title boundary tiles" → Run workflow, optionally scoped to one
-   council/county first via its `council`/`county` input (same shape as
-   the old sync workflows). Check the run's log for a sensible parsed
-   parcel count, then check the `title-tiles-latest` release (repo's
+2. The build workflow lives entirely in
+   [`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles),
+   not this repo, and needs no Supabase secrets at all (it never touches
+   the database) — just GitHub's own built-in token, already available to
+   every workflow there.
+3. **Before trusting the schedule, run it once by hand**, in that other
+   repo: Actions → "Build title boundary tiles" → Run workflow,
+   optionally scoped to one council/county first via its `council`/
+   `county` input. Check the run's log for a sensible parsed parcel
+   count, then check that repo's `title-tiles-latest` release (its
    **Releases** page) actually has fresh assets attached.
 4. Once that release exists, click **"Look up title"** on any
-   nomination's admin detail page — it should return a result (a title
-   number, or a genuine "no known owner") within a second or two.
+   nomination's admin detail page in *this* app — it should return a
+   result (a title number, or a genuine "no known owner") within a
+   second or two.
 
-### The original bulk-sync design, for history
+### History: how the real parsing quirks were found
 
-The paragraphs and setup steps below describe
-`scripts/sync-title-boundaries-{ew,scotland}.mjs` and the `title_boundaries`
-table they fed — **retired**, per the incident above, but kept here
-because the real-world parsing findings (the exact HMLR schema quirks,
-the Registers of Scotland domain change, the confirmed real parcel
-counts) came from hard-won live debugging against the real sources, and
-the new `build-title-tiles-{ew,scotland}.mjs` scripts reuse that same
-proven parsing code (`scripts/lib/inspireGml.mjs`, `parcelExtraction.mjs`,
-`shapefileParcels.mjs`, `httpWithCookies.mjs`) unchanged — only what
-happens to each parsed parcel afterwards (written to a tile file, not
-upserted into Postgres) is different. Nothing below should be treated as
-instructions to actually run any more; `title_boundaries` itself and
-`admin_title_boundary_coverage()` were renamed to `_retired` (not
-dropped — `DROP TABLE`/`DROP FUNCTION` both hung against this project,
-same as a few migrations before it) and are inert, unreachable dead
-schema now.
+The real-world parsing findings below (exact HMLR schema quirks, the
+Registers of Scotland domain change, confirmed real parcel counts) came
+from hard-won live debugging against the real sources, while this was
+still the bulk-sync design (`sync-title-boundaries-{ew,scotland}.mjs`,
+writing into a since-retired `title_boundaries` Postgres table — see the
+outage note at the top of this section). The current
+`build-title-tiles-{ew,scotland}.mjs` scripts, now in
+[`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles),
+reuse this same proven parsing code unchanged — only what happens to
+each parsed parcel afterwards (written to a tile file, not upserted into
+Postgres) is different. Kept here as the historical record of *why* the
+parsers look the way they do; nothing below is a live setup step for
+*this* repo any more.
 
-**Read this before trusting it on a schedule:** the two sync scripts
-(`scripts/sync-title-boundaries-ew.mjs`, `scripts/sync-title-boundaries-scotland.mjs`)
-were written and tested against synthetic data built from HMLR's and
-Registers of Scotland's *documented* INSPIRE Cadastral Parcels schema —
-there was no way, from the environment they were built in, to download a
-real file from either registry and check the parser against it. Both
-scripts are deliberately tolerant (they search by element name, ignoring
-exact namespace prefixes, and try several plausible property names) and
-fail loudly (they throw rather than silently writing zero/partial rows)
-rather than guessing — but "tolerant" isn't "verified". **Run both with
-`--dry-run` against one real council/county first** and check the logged
-sample (a parsed title number and point count) before ever relying on the
-scheduled runs.
-
-**Already found, fixed, and confirmed working against the real England &
-Wales site (Oct 2026) — three real bugs, each only visible once the
-previous one was fixed:**
+**England & Wales — three real bugs, each only visible once the previous
+one was fixed:**
 1. The first real run against HMLR's download page failed with
    `fetch failed` / `redirect count exceeded` — not a login wall as
    originally suspected, but a cookie-walk redirect (a response sets a
    session cookie and redirects back to the same URL, expecting that
-   cookie on the next request). `scripts/lib/httpWithCookies.mjs` follows
-   redirects manually and carries cookies between hops to handle this;
-   both scripts use it for every fetch now.
+   cookie on the next request). `httpWithCookies.mjs` follows redirects
+   manually and carries cookies between hops to handle this.
 2. Once that was fixed, the scrape found zero council links at all — the
    real download link is a `.zip` (one `.gml` inside), not a raw `.gml`
    as first assumed, and the council name sits in the table row's
    heading, not the link's own text (which just says "Download .gml").
-   `scripts/lib/inspireGml.mjs`'s `extractGmlTexts()` now detects a zip
-   by magic bytes and unpacks every `.gml`/`.xml` entry inside it; the
-   EW scraper's row pattern was fixed to match.
+   `inspireGml.mjs`'s `extractGmlTexts()` detects a zip by magic bytes
+   and unpacks every `.gml`/`.xml` entry inside it.
 3. Once that was fixed, a real council's zip unpacked fine but parsed
    zero parcels — HMLR's actual feature type is its own `LR:PREDEFINED`,
    not the standard INSPIRE `cp:CadastralParcel` this was built against,
@@ -651,126 +637,35 @@ previous one was fixed:**
    `LR:NATIONALCADASTRALREFERENCE`, ...) where the parser's name-matching
    was case-sensitive, and the title reference's text parses as a bare
    JS number (e.g. `63934897`), which the code only handled as a string.
-   All three are fixed in `scripts/lib/inspireGml.mjs`.
+   All three are fixed in `inspireGml.mjs`.
 
-**Confirmed end to end**, via a live `--council="Exeter" --dry-run` run:
-all 50,584 of Exeter City Council's real parcels parsed correctly, each
-with a real title reference and a realistic point count. England & Wales
-can be trusted on the schedule.
+Confirmed end to end via a live `--council="Exeter" --dry-run` run: all
+50,584 of Exeter City Council's real parcels parsed correctly.
 
-**Scotland needed a bigger change, now also confirmed working end to end.**
-A live run against the Atom feed failed with
-`ENOTFOUND ros.locationcentre.co.uk` — that domain turned out to be RoS's
-old host; search afterwards confirmed `ros-inspire.themapcloud.com` as
-the current one. That site turned out to be a client-rendered app with
-nothing to scrape in its HTML — the real county list (33 entries, one
-per Registration County) and the download URL pattern
+**Scotland needed a bigger change.** A live run against the Atom feed
+failed with `ENOTFOUND ros.locationcentre.co.uk` — that domain turned out
+to be RoS's old host; `ros-inspire.themapcloud.com` is the current one.
+That site is a client-rendered app with nothing to scrape in its HTML —
+the real county list and download URL pattern
 (`maps/download/ros-cp.cadastralparcel/<code>`) were found by fetching
-its JS bundles directly and reading the source. The downloaded `.zip`
-itself turned out to be an **ESRI Shapefile** (two coordinate-system
-variants per county; this always reads the `_bng` one), not GML at all —
-`scripts/lib/shapefileParcels.mjs` (via the `shapefile` npm package) and
-`scripts/lib/parcelExtraction.mjs` (a unified dispatcher that recognises
-either GML or Shapefile inside a zip) handle that.
+its JS bundles directly. The downloaded `.zip` itself turned out to be an
+**ESRI Shapefile** (two coordinate-system variants per county; this
+always reads the `_bng` one), not GML at all — `shapefileParcels.mjs`
+(via the `shapefile` npm package) and `parcelExtraction.mjs` (a unified
+dispatcher recognising either GML or Shapefile inside a zip) handle that.
 
-**Confirmed end to end**, via a live `--county="Lanark" --dry-run` run:
-all 200,011 of Lanark's real parcels parsed correctly, each with a real
-title reference (e.g. `SCT0004276910`). Both nations can now be trusted
-on their schedules.
+Confirmed end to end via a live `--county="Lanark" --dry-run` run: all
+200,011 of Lanark's real parcels parsed correctly, each with a real
+title reference (e.g. `SCT0004276910`).
 
-To set it up:
-
-1. The two tables/functions are already applied to the live project — no
-   migration step needed.
-2. **Dashboard → Settings → API** — copy the `service_role` key, same
-   warning as §12: never the anon key, never commit it, never a `VITE_`-
-   prefixed variable.
-3. Add two **GitHub Actions repo secrets** (Settings → Secrets and
-   variables → Actions): `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` —
-   plain names, not the `VITE_`-prefixed ones from §4 (those are for the
-   client bundle; these are for a server-side script with write access
-   RLS doesn't grant anon/authenticated).
-4. **Test against real data first, from the Actions UI.** From **Actions
-   → Sync England & Wales title boundaries / Sync Scotland title
-   boundaries → Run workflow**, tick **Dry run** and optionally set
-   **Council**/**County** to one small area, then open the run's log and
-   check the sample it printed looks right (a real-looking title number,
-   a sensible point count). Repeat for the other nation.
-   - **If that works**, you're done — skip straight to step 6. The
-     scheduled workflow fetches the file live every time, nothing more
-     to download or place anywhere.
-   - **If it throws an error** naming a council-link page or an Atom
-     feed it couldn't parse, that's either a real schema change (the
-     error names what it expected and didn't find) or — unconfirmed from
-     the environment this was built in, since it had no network access
-     to check — HMLR's download page may require a free account/sign-in
-     in a browser, which an unauthenticated fetch from a GitHub Actions
-     runner can't do anything about. Either way, go to step 5.
-
-5. **Fallback: download the file yourself and point the script at it.**
-   This runs on your own computer, not in GitHub Actions — you'll need
-   [Node.js](https://nodejs.org) installed and this repo cloned locally
-   first (`git clone https://github.com/jamspr95/StopSpotter.git`, then
-   `npm install` inside it).
-
-   **England & Wales:**
-   1. In a normal browser, open
-      <https://use-land-property-data.service.gov.uk/datasets/inspire/download>.
-      Create a free account / sign in if it asks you to.
-   2. Find one council in the list (anything, for a first test — e.g.
-      your own local authority) and click its download link. It saves a
-      `.zip` file (e.g. `Exeter_District_Council.zip`, containing one
-      `.gml` inside) to your Downloads folder — confirmed against the
-      real page; the link's own text just says "Download .gml", but the
-      actual download is a zip.
-   3. Inside the cloned repo, create a folder called `downloads/ew` (it's
-      already in `.gitignore`, so nothing you put there gets committed)
-      and move that `.zip` file into it — no need to unzip it yourself,
-      the script does that:
-      ```bash
-      mkdir -p downloads/ew
-      mv ~/Downloads/*.zip downloads/ew/
-      ```
-   4. From a terminal in the repo folder, run:
-      ```bash
-      node scripts/sync-title-boundaries-ew.mjs --dir=downloads/ew --dry-run
-      ```
-      Check the printed sample (a title number and point count) looks
-      real. Repeat steps 2-4 for more councils if you want, or download
-      all ~380 the same way for a full one-off load — tedious by hand,
-      which is exactly why the scheduled workflow (once it's confirmed
-      working, or fixed) is the real long-term path, not this.
-   5. Once it looks right, run the same command **without** `--dry-run`,
-      with the Supabase secrets set, to actually load it:
-      ```bash
-      SUPABASE_URL=https://xxxxx.supabase.co \
-      SUPABASE_SERVICE_ROLE_KEY=eyJ... \
-        node scripts/sync-title-boundaries-ew.mjs --dir=downloads/ew
-      ```
-
-   **Scotland** — same idea, different source:
-   1. Open <https://ros-inspire.themapcloud.com/> in a browser. Pick a
-      county from the **File to Download** dropdown, tick **I accept the
-      Terms and Conditions of Use**, and click **Submit** — it downloads
-      a `.zip` (an ESRI Shapefile inside, confirmed — not GML; the script
-      handles unzipping and reading it, nothing to do with the file
-      yourself beyond saving it).
-   2. `mkdir -p downloads/scotland` and move the downloaded file(s) there.
-   3. `node scripts/sync-title-boundaries-scotland.mjs --dir=downloads/scotland --dry-run`,
-      check the sample, then re-run without `--dry-run` (with the same
-      two Supabase secrets set) to load it for real.
-
-6. Once rows exist (from either path), `admin_list_nominations()` starts
-   returning a real `title_number`/`title_tenure` match (or `null`) for
-   every nomination immediately, no redeploy needed, and the admin
-   dashboard's coverage notice (§ above) stops showing once both nations
-   have at least some data loaded. If the live scheduled workflow
-   (monthly for England & Wales — HMLR publishes ~the 6th of each month —
-   quarterly for Scotland) turned out to need the §5 fallback, it'll keep
-   failing on the same schedule until someone either fixes the scraper/
-   feed parsing for whatever changed, or this becomes a recurring manual
-   job via §5 instead — there's no third thing happening silently in
-   between.
+**The `--dir` fallback** (download the file yourself in a browser, point
+the script at the saved file) still exists in the current scripts for
+the same reason it existed in the retired ones — in case either
+registry's download page ever starts requiring a signed-in browser
+session an unauthenticated GitHub Actions runner can't satisfy. See
+[`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles)'s
+own README/usage for the exact commands; it's a clone of that repo you'd
+run this in now, not this one.
 
 ## 16. Automatic content moderation (recommended, optional until you add the key)
 

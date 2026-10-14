@@ -4,8 +4,10 @@
 // Given one nomination's coordinates, works out which grid tile it falls
 // in, fetches just that one small pre-built GeoJSON file from the
 // title-tiles-latest GitHub Release (published by
-// .github/workflows/build-title-tiles.yml), and does a plain
-// point-in-polygon check against whatever parcels that tile contains.
+// jamspr95/stopspotter-title-tiles's build-title-tiles.yml workflow — a
+// separate public repo, not this one; see TILE_BASE_URL below for why),
+// and does a plain point-in-polygon check against whatever parcels that
+// tile contains.
 // Never touches Postgres for the national data — only the admin RPC that
 // calls this (admin_set_nomination_title, 0017_title_lookup_columns.sql)
 // writes the single resolved result back.
@@ -17,13 +19,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 // ============================================================================
-// Grid math — MUST stay byte-for-byte identical to scripts/lib/titleTiles.mjs's
-// CELL_SIZE_DEG/FINE_CELLS_PER_SHARD/cellIdForPoint/shardIdForCellId. They're
-// duplicated (not shared via import) because one runs under Node and this
-// one under Deno; see that file's own top-of-file comment for why that's a
-// deliberate tradeoff, not an oversight, and for why there are two grid
-// sizes (a fine lookup grid vs. a coarser shard/file-boundary grid) rather
-// than one.
+// Grid math — MUST stay byte-for-byte identical to
+// jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs
+// (CELL_SIZE_DEG/FINE_CELLS_PER_SHARD/cellIdForPoint/shardIdForCellId).
+// They're duplicated (not shared via import) because one runs under Node,
+// in a different repo entirely, and this one under Deno; see that file's
+// own top-of-file comment for why that's a deliberate tradeoff, not an
+// oversight, and for why there are two grid sizes (a fine lookup grid vs.
+// a coarser shard/file-boundary grid) rather than one.
 // ============================================================================
 const CELL_SIZE_DEG = 0.1
 const FINE_CELLS_PER_SHARD = 5
@@ -42,7 +45,14 @@ function shardIdForCellId(cellId: string): string {
 }
 
 const RELEASE_TAG = 'title-tiles-latest'
-const TILE_BASE_URL = `https://github.com/jamspr95/StopSpotter/releases/download/${RELEASE_TAG}`
+// The build pipeline that publishes this release now lives in its own
+// public repo (jamspr95/stopspotter-title-tiles), split out so it can
+// stay public once this app repo goes private — see that repo's README.
+// A plain unauthenticated fetch like the one below only ever works
+// against a PUBLIC repo's release assets; a private repo's assets need
+// api.github.com + a token instead, which is the whole reason this
+// moved rather than just making this repo private directly.
+const TILE_BASE_URL = `https://github.com/jamspr95/stopspotter-title-tiles/releases/download/${RELEASE_TAG}`
 
 interface TitleTileLine {
   c: string
@@ -56,7 +66,7 @@ type TitleFeature = Omit<TitleTileLine, 'c'>
 // Each release asset is a gzipped shard covering FINE_CELLS_PER_SHARD^2
 // fine cells, written as newline-delimited JSON — one line per feature
 // per fine cell it belongs to, each line carrying its own fine cell id
-// ("c") — see scripts/lib/titleTiles.mjs's writeParcelsToShardParts/
+// ("c") — see jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs's writeParcelsToShardParts/
 // finalizeShards. There's no top-level index structure, so this filters
 // to the one fine cell actually asked for as it streams the lines; a
 // shard is small enough (FINE_CELLS_PER_SHARD^2 fine cells' worth) that
@@ -98,7 +108,7 @@ function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
 function findMatch(lng: number, lat: number, features: TitleFeature[]): TitleFeature | null {
   for (const feature of features) {
     // Each MultiPolygon member here is always a single ring (no holes) —
-    // see scripts/lib/titleTiles.mjs's writeParcelsToShardParts.
+    // see jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs's writeParcelsToShardParts.
     for (const member of feature.geometry.coordinates) {
       if (pointInRing(lng, lat, member[0])) return feature
     }
