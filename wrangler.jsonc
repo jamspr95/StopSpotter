@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  // StopSpotter — Cloudflare Workers (static assets) hosting, replacing
+  // GitHub Pages so the repo can go private without breaking the live
+  // site (GitHub Pages only serves private repos on a paid plan). Assets-
+  // only: no "main" field, no server-side Worker code, same SPA this
+  // always was. See docs/SETUP.md's Cloudflare hosting section.
+  "name": "stopspotter",
+  "compatibility_date": "2026-10-14",
+  "assets": {
+    "directory": "./dist",
+    // vite.config.ts's base stays "/StopSpotter/" for GitHub Pages — the
+    // "build:cloudflare" script overrides it to "/" at build time instead
+    // of changing the shared config, so neither host's build breaks the
+    // other's while both exist side by side during the hosting migration.
+    "not_found_handling": "single-page-application"
+  }
+}

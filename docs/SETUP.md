@@ -695,3 +695,57 @@ geospatial check, not a text one, and isn't built.
    from the public map (admin still sees it) and a new row should appear
    in **Admin → Moderation reports**, reason starting "Auto-flagged by
    moderation API: ...". No redeploy needed to pick up the new secret.
+
+## 17. Cloudflare Workers hosting (replacing GitHub Pages)
+
+Why: this repo is moving to **private** before launch, and GitHub Pages
+only serves a site from a **private** repo on GitHub Pro/Team/Enterprise
+— never Free, custom domain or not. Cloudflare Workers (with static
+assets — the current replacement for "Pages", per Cloudflare's own
+guidance) deploys from a private repo for free, on any plan, with no
+such restriction.
+
+`wrangler.jsonc` is assets-only (no server-side Worker code — this is
+still the same client-side SPA it always was), serving `./dist` with
+`not_found_handling: "single-page-application"` so a direct load of a
+client route (e.g. `/stop/:id`) resolves, the same job GitHub Pages'
+`dist/404.html` copy does today.
+
+**Why there's a separate `build:cloudflare` script**: `vite.config.ts`'s
+`base` stays `/StopSpotter/` for GitHub Pages — changed only for the
+final cutover, not before, so the two hosts can run side by side during
+the migration without either one's deploy breaking the other's. Cloudflare
+Workers serves from the domain root, not a subpath, so its build needs
+`base: '/'` instead; `npm run build:cloudflare` overrides it at build
+time (`vite build --base=/`) rather than touching the shared config file.
+
+### Setting it up
+
+1. **Create an API token**: [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
+   → Create Token → custom token with **Account → Cloudflare Pages →
+   Edit** (Workers deploys still use this scope) and **Account → Account
+   Settings → Read**.
+2. Set it locally as `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`,
+   from the Cloudflare dashboard's right sidebar on any domain/account
+   page, if the token's account can't be inferred automatically), then:
+   ```bash
+   npm run deploy:cloudflare
+   ```
+   This runs `build:cloudflare` then `wrangler deploy`. First deploy
+   creates the Worker and gives you a `*.workers.dev` URL to test against.
+3. **Custom domain**: Cloudflare dashboard → Workers & Pages → this
+   worker → Settings → Domains & Routes → Add a custom domain. For a
+   subdomain of a zone already on Cloudflare, this is immediate; for one
+   that isn't, Cloudflare walks through the DNS changes needed.
+4. **Environment variables** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+   etc. — same ones `deploy.yml` sets today) need to exist at **build**
+   time, not runtime, since Vite inlines them into the bundle — export
+   them in whatever shell runs `npm run deploy:cloudflare`, or wire this
+   into a CI job (e.g. a GitHub Actions workflow calling `wrangler deploy`
+   with `CLOUDFLARE_API_TOKEN` as a repo secret) once this is confirmed
+   working by hand.
+5. **Once Cloudflare is confirmed serving correctly** (not before — this
+   keeps the live GitHub Pages site intact in the meantime): retire
+   `.github/workflows/deploy.yml` and, in repo Settings → Pages, disable
+   GitHub Pages. Only then does making the repo private stop being a risk
+   to the live site.

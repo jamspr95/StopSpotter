@@ -12,10 +12,9 @@ dist
 dist-ssr
 *.local
 
-# Manually-downloaded HMLR/Registers of Scotland files for
-# scripts/sync-title-boundaries-*.mjs's --dir fallback — see
-# docs/SETUP.md §15. Large, and not something to commit.
-/downloads/
+# Cloudflare Workers/Wrangler local dev state — see wrangler.jsonc.
+.wrangler
+.dev.vars*
 
 # Editor directories and files
 .vscode/*
