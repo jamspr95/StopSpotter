@@ -771,3 +771,32 @@ To set it up:
    feed parsing for whatever changed, or this becomes a recurring manual
    job via §5 instead — there's no third thing happening silently in
    between.
+
+## 16. Automatic content moderation (recommended, optional until you add the key)
+
+Covers the "Decide on an automatic moderation approach" launch-checklist
+item and `docs/BUILD_PLAN.md`'s "Automatic AI moderation check" row.
+Every nomination's "why here" text already lands in the admin dashboard
+(always) and, once cleared, on the public map — this adds an automatic
+check in between using OpenAI's moderation endpoint (free for any API
+account; chosen over Google's Perspective API, which sunsets 31 Dec 2026,
+and AWS Comprehend Toxicity Detection, which has no free tier). It does
+**not** cover a pin being placed on someone's actual home — that's a
+geospatial check, not a text one, and isn't built.
+
+1. The schema (`0020_auto_moderation.sql`), the Edge Function
+   (`moderate-nomination-text`), and the client-side wiring (fires once,
+   right after a nomination saves) are all already applied/deployed — no
+   manual step needed for any of that.
+2. **Without an API key, this silently does nothing** — exactly the
+   behaviour before this feature existed, not an error state. To turn it
+   on:
+   - Create an API key at [platform.openai.com](https://platform.openai.com/api-keys) (no paid plan needed — the moderation endpoint itself is free).
+   - Add it as an Edge Function secret named `OPENAI_API_KEY` on the
+     Supabase project (Project Settings → Edge Functions → Secrets, or
+     `mcp__Supabase__create_edge_function_secret` from a coding session).
+3. Once the key is set, submit a test nomination with deliberately
+   flagged "why here" text — within a second or two it should disappear
+   from the public map (admin still sees it) and a new row should appear
+   in **Admin → Moderation reports**, reason starting "Auto-flagged by
+   moderation API: ...". No redeploy needed to pick up the new secret.

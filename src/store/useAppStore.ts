@@ -265,6 +265,11 @@ async function ensureNominationSaved(
       })
     : `nom-${crypto.randomUUID()}`
 
+  // Fire-and-forget automatic content check — never awaited, never lets a
+  // moderation failure affect the save that already succeeded above. See
+  // db.moderateNomination's own comment for why.
+  if (isSupabaseConfigured) void db.moderateNomination(id)
+
   const nomination = nominationFromDraft(id, null, draft, false, councilArea, areaLabel)
   const currentFlow = get().pendingFlow
   set({

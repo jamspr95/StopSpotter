@@ -266,6 +266,24 @@ export async function insertNomination(input: NominationInsert): Promise<string>
   return nominationId
 }
 
+/**
+ * Fire-and-forget automatic content check (supabase/functions/
+ * moderate-nomination-text) — see 0020_auto_moderation.sql's header
+ * comment for why a failure here is swallowed rather than thrown: this
+ * is a safety net on top of why_here already being public by default,
+ * never a gate the submission flow depends on.
+ */
+export async function moderateNomination(nominationId: string): Promise<void> {
+  try {
+    const { error } = await client().functions.invoke('moderate-nomination-text', {
+      body: { nominationId },
+    })
+    if (error) throw error
+  } catch (err) {
+    console.error('Automatic moderation check failed (non-fatal):', err)
+  }
+}
+
 function hasLandownerDetail(lo: LandownerFollowUp): boolean {
   return Boolean(lo.ownerNameOrOrg || lo.howKnown || lo.contact)
 }
