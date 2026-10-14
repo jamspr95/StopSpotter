@@ -108,12 +108,12 @@ async function buildOneCouncil(outDir, name, getBytes, dryRun) {
 
   if (dryRun) return 0
 
-  const cellsTouched = await appendParcelsToTiles(
+  const shardsTouched = await appendParcelsToTiles(
     outDir,
     'england_wales',
     parcels.map((p) => ({ titleNumber: p.titleNumber, tenure: 'freehold', polygons: p.polygons })),
   )
-  console.log(`  wrote into ${cellsTouched} tile cell(s)`)
+  console.log(`  wrote into ${shardsTouched} shard file(s)`)
   return parcels.length
 }
 

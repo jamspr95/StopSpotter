@@ -18,16 +18,27 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 // ============================================================================
 // Grid math — MUST stay byte-for-byte identical to scripts/lib/titleTiles.mjs's
-// CELL_SIZE_DEG/cellIdForPoint. They're duplicated (not shared via import)
-// because one runs under Node and this one under Deno; see that file's own
-// top-of-file comment for why that's a deliberate tradeoff, not an oversight.
+// CELL_SIZE_DEG/FINE_CELLS_PER_SHARD/cellIdForPoint/shardIdForCellId. They're
+// duplicated (not shared via import) because one runs under Node and this
+// one under Deno; see that file's own top-of-file comment for why that's a
+// deliberate tradeoff, not an oversight, and for why there are two grid
+// sizes (a fine lookup grid vs. a coarser shard/file-boundary grid) rather
+// than one.
 // ============================================================================
 const CELL_SIZE_DEG = 0.1
+const FINE_CELLS_PER_SHARD = 5
 
 function cellIdForPoint(lat: number, lng: number): string {
   const latBucket = Math.floor(lat / CELL_SIZE_DEG)
   const lngBucket = Math.floor(lng / CELL_SIZE_DEG)
   return `${latBucket}_${lngBucket}`
+}
+
+function shardIdForCellId(cellId: string): string {
+  const [latBucket, lngBucket] = cellId.split('_').map(Number)
+  const shardLatBucket = Math.floor(latBucket / FINE_CELLS_PER_SHARD)
+  const shardLngBucket = Math.floor(lngBucket / FINE_CELLS_PER_SHARD)
+  return `${shardLatBucket}_${shardLngBucket}`
 }
 
 const RELEASE_TAG = 'title-tiles-latest'
@@ -39,12 +50,20 @@ interface TitleFeature {
   geometry: { type: 'MultiPolygon'; coordinates: number[][][][] }
 }
 
+// Each release asset is a gzipped shard covering FINE_CELLS_PER_SHARD^2
+// fine cells, shaped `{ cells: { "<fineCellId>": TitleFeature[] } }` (see
+// scripts/lib/titleTiles.mjs's appendParcelsToTiles) — fetching one shard
+// and indexing straight into its own fine cell means this never scans
+// parcels from neighbouring fine cells just because they share a shard.
 async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): Promise<TitleFeature[]> {
-  const res = await fetch(`${TILE_BASE_URL}/${nation}_${cellId}.json`)
-  if (res.status === 404) return [] // no parcels in this cell for this nation — normal, not an error
-  if (!res.ok) throw new Error(`Failed to fetch tile ${nation}/${cellId}: ${res.status}`)
-  const body = await res.json()
-  return body.features ?? []
+  const shardId = shardIdForCellId(cellId)
+  const res = await fetch(`${TILE_BASE_URL}/${nation}_${shardId}.json.gz`)
+  if (res.status === 404) return [] // no parcels in this shard for this nation — normal, not an error
+  if (!res.ok) throw new Error(`Failed to fetch shard ${nation}/${shardId}: ${res.status}`)
+  if (!res.body) return []
+  const decompressed = res.body.pipeThrough(new DecompressionStream('gzip'))
+  const body = JSON.parse(await new Response(decompressed).text())
+  return body.cells?.[cellId] ?? []
 }
 
 /** Plain ray-casting point-in-polygon, ring = [[lng, lat], ...]. */

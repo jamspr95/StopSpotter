@@ -112,12 +112,12 @@ async function buildOneCounty(outDir, name, getBytes, dryRun) {
 
   if (dryRun) return 0
 
-  const cellsTouched = await appendParcelsToTiles(
+  const shardsTouched = await appendParcelsToTiles(
     outDir,
     'scotland',
     parcels.map((p) => ({ titleNumber: p.titleNumber, tenure: null, polygons: p.polygons })),
   )
-  console.log(`  wrote into ${cellsTouched} tile cell(s)`)
+  console.log(`  wrote into ${shardsTouched} shard file(s)`)
   return parcels.length
 }
 
