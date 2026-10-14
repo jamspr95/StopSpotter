@@ -155,6 +155,14 @@ export interface AdminNomination {
   titleNumber: string | null
   titleTenure: string | null
   titleCheckedAt: string | null
+  /** The matched parcel's own outline (an indicative extent, not the legal boundary) — null whenever titleNumber is, since there's nothing to draw without a match. */
+  titleGeometry: TitleGeometry | null
+}
+
+/** Shape lookup-title-boundary's Edge Function returns — always a single-ring-per-member MultiPolygon, see scripts/lib/titleTiles.mjs. */
+export interface TitleGeometry {
+  type: 'MultiPolygon'
+  coordinates: number[][][][]
 }
 
 export interface AdminLandownerLead {

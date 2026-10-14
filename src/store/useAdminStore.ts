@@ -143,7 +143,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     if (!nomination) return
     set({ titleLookupLoadingId: nominationId, error: null })
     try {
-      const { titleNumber, titleTenure } = await db.lookupNominationTitle(
+      const { titleNumber, titleTenure, titleGeometry } = await db.lookupNominationTitle(
         nominationId,
         nomination.exact.lat,
         nomination.exact.lng,
@@ -152,7 +152,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         titleLookupLoadingId: null,
         nominations: s.nominations.map((n) =>
           n.id === nominationId
-            ? { ...n, titleNumber, titleTenure, titleCheckedAt: new Date().toISOString() }
+            ? { ...n, titleNumber, titleTenure, titleGeometry, titleCheckedAt: new Date().toISOString() }
             : n,
         ),
       }))

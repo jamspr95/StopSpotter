@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, Marker } from 'react-leaflet'
+import { GeoJSON, MapContainer, Marker } from 'react-leaflet'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
 import { SiteExplorer } from '../../components/SiteExplorer'
@@ -107,6 +107,15 @@ export function AdminStopDetailScreen() {
           <MapContainer center={nomination.exact} zoom={16} className="z-0 h-full w-full" zoomControl={false}>
             <MapTiles satellite={satellite} />
             <Marker position={nomination.exact} />
+            {nomination.titleGeometry && (
+              // key forces a remount when the match changes — react-leaflet's
+              // GeoJSON layer doesn't otherwise pick up a changed `data` prop.
+              <GeoJSON
+                key={`${nomination.titleNumber}-${nomination.titleCheckedAt}`}
+                data={nomination.titleGeometry}
+                style={{ color: '#4f46e5', weight: 2, fillOpacity: 0.12 }}
+              />
+            )}
           </MapContainer>
           <div className="absolute left-3 top-3 z-10">
             <SatelliteToggle satellite={satellite} onChange={setSatellite} />

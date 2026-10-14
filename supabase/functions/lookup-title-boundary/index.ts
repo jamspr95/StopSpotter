@@ -136,6 +136,11 @@ Deno.serve(async (req) => {
     JSON.stringify({
       titleNumber: match?.properties.title_number ?? null,
       tenure: match?.properties.tenure ?? null,
+      // The matched parcel's own outline — an indicative extent, not the
+      // legal boundary (see 0015_title_boundaries.sql's original caveat,
+      // still true here) — so the admin map can draw it, not just show
+      // the title number as text.
+      geometry: match?.geometry ?? null,
     }),
     { headers: { 'Content-Type': 'application/json' } },
   )

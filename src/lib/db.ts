@@ -15,6 +15,7 @@ import type {
   NominationAnswers,
   NominationStatus,
   PayBand,
+  TitleGeometry,
   Vote,
 } from '../types'
 
@@ -532,6 +533,7 @@ interface AdminNominationRow {
   title_number: string | null
   title_tenure: string | null
   title_checked_at: string | null
+  title_geometry: TitleGeometry | null
 }
 
 export async function adminListNominations(): Promise<AdminNomination[]> {
@@ -578,6 +580,7 @@ export async function adminListNominations(): Promise<AdminNomination[]> {
     titleNumber: row.title_number,
     titleTenure: row.title_tenure,
     titleCheckedAt: row.title_checked_at,
+    titleGeometry: row.title_geometry,
   }))
 }
 
@@ -594,10 +597,11 @@ export async function lookupNominationTitle(
   nominationId: string,
   lat: number,
   lng: number,
-): Promise<{ titleNumber: string | null; titleTenure: string | null }> {
+): Promise<{ titleNumber: string | null; titleTenure: string | null; titleGeometry: TitleGeometry | null }> {
   const { data: fnResult, error: fnError } = await client().functions.invoke<{
     titleNumber: string | null
     tenure: string | null
+    geometry: TitleGeometry | null
   }>('lookup-title-boundary', { body: { lat, lng } })
   if (fnError) throw fnError
   if (!fnResult) throw new Error('Title lookup returned no result.')
@@ -606,10 +610,11 @@ export async function lookupNominationTitle(
     p_nomination_id: nominationId,
     p_title_number: fnResult.titleNumber,
     p_title_tenure: fnResult.tenure,
+    p_title_geometry: fnResult.geometry,
   })
   if (rpcError) throw rpcError
 
-  return { titleNumber: fnResult.titleNumber, titleTenure: fnResult.tenure }
+  return { titleNumber: fnResult.titleNumber, titleTenure: fnResult.tenure, titleGeometry: fnResult.geometry }
 }
 
 export async function adminUpdateNominationStatus(
