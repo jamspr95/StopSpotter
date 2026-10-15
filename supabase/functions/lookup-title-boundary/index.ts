@@ -18,6 +18,25 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
+// Real incident (Oct 2026): "nothing happens" when the button is clicked.
+// This is the first (and so far only) edge function in this project
+// actually called from the browser — supabase-js's functions.invoke()
+// sends a custom Authorization header, which makes the browser send a
+// CORS preflight OPTIONS request first. This function had no CORS
+// handling at all, so that preflight hit the `req.method !== 'POST'`
+// check below and got back a bare 405 with no Access-Control-Allow-*
+// headers — the browser then blocks the real POST as a CORS failure
+// before it ever reaches this function, surfacing to supabase-js as a
+// generic network error. Confirmed from the real edge function logs:
+// nothing but a long run of "OPTIONS | 405" entries, no POST ever
+// logged. Every response (including the preflight's) now carries these
+// headers so the browser actually lets the POST through.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 // ============================================================================
 // Grid math — MUST stay byte-for-byte identical to
 // jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs
@@ -117,18 +136,24 @@ function findMatch(lng: number, lat: number, features: TitleFeature[]): TitleFea
 }
 
 Deno.serve(async (req) => {
+  // The CORS preflight itself — must return 2xx with these headers or the
+  // browser never sends the real POST at all (see corsHeaders' comment above).
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders })
   }
 
   let payload: { lat?: number; lng?: number }
   try {
     payload = await req.json()
   } catch {
-    return new Response('Invalid JSON', { status: 400 })
+    return new Response('Invalid JSON', { status: 400, headers: corsHeaders })
   }
   if (typeof payload.lat !== 'number' || typeof payload.lng !== 'number') {
-    return new Response('Body must be { lat: number, lng: number }', { status: 400 })
+    return new Response('Body must be { lat: number, lng: number }', { status: 400, headers: corsHeaders })
   }
 
   // Authorization check: forward the CALLER's own JWT (not the service
@@ -141,7 +166,7 @@ Deno.serve(async (req) => {
   )
   const { data: isAdmin, error: authError } = await supabaseAsCaller.rpc('current_user_is_admin')
   if (authError || !isAdmin) {
-    return new Response('Unauthorized', { status: 401 })
+    return new Response('Unauthorized', { status: 401, headers: corsHeaders })
   }
 
   const cellId = cellIdForPoint(payload.lat, payload.lng)
@@ -167,6 +192,6 @@ Deno.serve(async (req) => {
       // the title number as text.
       geometry: match?.geometry ?? null,
     }),
-    { headers: { 'Content-Type': 'application/json' } },
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   )
 })
