@@ -29,16 +29,6 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
           VITE_SSO_ENABLED: ${{ vars.VITE_SSO_ENABLED }}
-      # Temporary: confirm VITE_SUPABASE_URL actually got baked into the
-      # bundle (checks for the project ref substring only — not secret,
-      # already public in docs/CLOUDFLARE_MIGRATION_PLAN.md — never prints
-      # a key). Remove once the "nominated site doesn't show" bug is found.
-      - run: |
-          if grep -rq "pqnvbikuulofuypzyhxa" dist/assets/*.js; then
-            echo "Supabase project ref IS present in the built bundle"
-          else
-            echo "Supabase project ref NOT found in the built bundle"
-          fi
       - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
