@@ -82,16 +82,28 @@ export function NoKnownOwnerPanel({ nomination }: { nomination: AdminNomination 
 export function LookupTitleButton({ nomination }: { nomination: AdminNomination }) {
   const loadingId = useAdminStore((s) => s.titleLookupLoadingId)
   const lookupNominationTitle = useAdminStore((s) => s.lookupNominationTitle)
+  // AdminStore's `error` is shared across every admin action, not scoped to
+  // this lookup — real incident: this screen (AdminStopDetailScreen) never
+  // read it at all, so a failed lookup set it, then silently went nowhere;
+  // clicking the button looked like it did nothing. Only showing it while
+  // nothing else is loading keeps it from flashing an unrelated action's
+  // leftover error, though a stale one from another failed admin action
+  // elsewhere on this page could still show here until the next action
+  // clears it.
+  const error = useAdminStore((s) => s.error)
   const loading = loadingId === nomination.id
 
   return (
-    <button
-      type="button"
-      disabled={loading}
-      onClick={() => void lookupNominationTitle(nomination.id)}
-      className="mt-2 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-    >
-      {loading ? 'Looking up…' : nomination.titleCheckedAt == null ? 'Look up title' : 'Look up title again'}
-    </button>
+    <div>
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => void lookupNominationTitle(nomination.id)}
+        className="mt-2 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+      >
+        {loading ? 'Looking up…' : nomination.titleCheckedAt == null ? 'Look up title' : 'Look up title again'}
+      </button>
+      {!loading && error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+    </div>
   )
 }
