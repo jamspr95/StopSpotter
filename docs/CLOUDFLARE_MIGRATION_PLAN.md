@@ -110,42 +110,57 @@ hence the move to `deploy-cloudflare.yml`.
 | `docs/SETUP.md` §17 rewritten for the GitHub Actions deploy path | ✅ |
 | `CLOUDFLARE_API_TOKEN` secret + `CLOUDFLARE_ACCOUNT_ID` variable added by the user — confirmed working: auth succeeded and all 8 assets uploaded on the first real attempt | ✅ |
 | Removed `public/_redirects` (`/* /index.html 200`) — leftover from an earlier classic-Pages-era attempt, not used by GitHub Pages, and it broke the Workers deploy with "Infinite loop detected" (code 100324) because it duplicates what `wrangler.jsonc`'s `not_found_handling: "single-page-application"` already does. Confirmed via Cloudflare's own Pages→Workers migration docs that `not_found_handling` alone is the complete replacement | ✅ |
+| Fixed a real Supabase schema bug (unrelated to hosting) blocking all public nomination reads: `public_nominations` (a `security_invoker` view) was missing column-level `SELECT` grants for `anon`/`authenticated` on `area_label` and `why_here_moderation` on the base `nominations` table — see `supabase/migrations/0021_grant_public_nominations_column_select.sql` | ✅ |
+| Fixed a Leaflet crash (`icon={undefined}` clobbering the Marker's default icon — see `src/screens/MapScreen.tsx`) that only ever fired once a real nomination reached the client, i.e. only after the grants fix above | ✅ |
+| User confirmed `*.workers.dev` loads the map and shows real Supabase data end-to-end | ✅ |
 
 ## What's blocking (🔄, needs the user)
 
-| Task | Status |
-|---|---|
-| Re-run `deploy-cloudflare.yml` after the `_redirects` removal lands on `main`, confirm it goes green, and confirm the resulting `*.workers.dev` URL actually serves the app and talks to Supabase (not just a green run) | ⬜ |
+Nothing — `*.workers.dev` is confirmed live and serving real data
+end-to-end (user-confirmed after the `_redirects` and marker-icon fixes).
+Remaining cutover steps (retire GitHub Pages, go private) are deliberate
+later actions, not blockers — see "Cutover sequencing" below.
 
-## Custom domain (after the Worker is confirmed live)
+## Custom domain — moved to AWS, not Cloudflare
 
-1. Decide the domain — `airestop.co.uk` is already the verified sender
-   domain in Brevo, so a subdomain off it (e.g.
-   `stopspotter.airestop.co.uk`) needs no new registration. A fully
-   separate domain is the other option; needs registering first.
-2. Cloudflare dashboard → Workers & Pages → this worker → Settings →
-   Domains & Routes → Add → Custom Domain. Immediate if the zone is
-   already on Cloudflare; otherwise Cloudflare walks through the needed
-   DNS changes.
-3. Update the Supabase Auth redirect URL to the final domain
-   (`docs/SETUP.md` §5) — same step this always needed, regardless of
-   hosting.
-4. Once DNS + the custom domain are live, tell the user — one more code
-   check (confirm `base: '/'` behaviour is correct at the real domain
-   root, not a `*.workers.dev` subpath) but no code change expected.
+**Turns out Cloudflare can't host a custom domain here at all on a Free
+plan**, so this is no longer a Cloudflare step. Diagnosed 2026-10-15: the
+user wanted `nextstop.airestop.co.uk/stopspotter` (a subdomain of
+`airestop.co.uk`, which is authoritatively hosted on AWS Route 53 — the
+user does not want to move it). A Workers custom domain/route requires an
+*active Cloudflare zone* for the hostname, and Cloudflare's zone-creation
+flow rejects anything that isn't a bare apex domain for Free/Pro accounts
+(error 1093/1099) — onboarding just a subdomain while the parent stays
+elsewhere (CNAME/partial setup, or proper subdomain delegation) is
+Business/Enterprise-plan-gated. The only Free-plan option would have been
+moving the *entire* `airestop.co.uk` zone's DNS to Cloudflare, which the
+user explicitly ruled out.
+
+Given StopSpotter is a 100% static SPA with no server-side Worker code,
+Cloudflare was never a hard requirement for production anyway — it only
+solved "deploy from a private repo for free," and GitHub Actions deploying
+straight to AWS solves that exact problem too, using infrastructure the
+user's dev already runs (`airestop.co.uk` is on AWS). So: **production now
+goes on AWS S3 + CloudFront** — full handoff doc at
+[`docs/AWS_CUSTOM_DOMAIN_HANDOFF.md`](AWS_CUSTOM_DOMAIN_HANDOFF.md),
+written for the user's dev to execute (it needs AWS account access this
+session doesn't have). Cloudflare Workers hosting above stays live as a
+free `*.workers.dev` dev/preview URL — nothing about it changes, and the
+two deploys are fully independent (different workflow, different build
+target — `npm run build:aws` vs `npm run build:cloudflare`).
 
 ## Cutover sequencing (do this LAST, not as part of "getting Cloudflare working")
 
 Do not reorder this — each step assumes the previous one is confirmed,
-specifically so the live site never has a gap:
+specifically so the live site never has a gap. The custom domain (now AWS,
+see above) is independent of this sequence — it's not a prerequisite for
+any step below:
 
 1. Cloudflare Worker confirmed serving the real app correctly (functional
-   check, not just a successful `wrangler deploy`).
-2. Custom domain live on Cloudflare (if wanted before going private —
-   not strictly required, `*.workers.dev` works too).
-3. **Only then**: retire `.github/workflows/deploy.yml` and disable
+   check, not just a successful `wrangler deploy`) — ✅ done.
+2. **Only then**: retire `.github/workflows/deploy.yml` and disable
    GitHub Pages in repo Settings → Pages.
-4. **Only then**: make the repo private (Settings → General → Danger
+3. **Only then**: make the repo private (Settings → General → Danger
    Zone). Confirm the live site is unaffected immediately after.
 
 ## Why two build configs (don't "simplify" this away)

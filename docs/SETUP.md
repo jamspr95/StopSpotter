@@ -754,10 +754,11 @@ same `wrangler deploy` just works there.)
    Worker and Cloudflare assigns it a `*.workers.dev` URL — check the
    workflow's Cloudflare step output, or the dashboard, for it, then open
    it and confirm the app actually loads and talks to Supabase.
-4. **Custom domain**: Cloudflare dashboard → Workers & Pages → this
-   worker → Settings → Domains & Routes → Add a custom domain. For a
-   subdomain of a zone already on Cloudflare, this is immediate; for one
-   that isn't, Cloudflare walks through the DNS changes needed.
+4. **Custom domain**: not done through Cloudflare — see §18 below. A
+   Workers custom domain needs an active Cloudflare zone for the hostname,
+   and Cloudflare's Free plan can only create a zone for a bare apex
+   domain, not a subdomain of one hosted elsewhere. `*.workers.dev` stays
+   the dev/preview URL for this hosting path regardless.
 5. **Once Cloudflare is confirmed serving correctly** (not before — this
    keeps the live GitHub Pages site intact in the meantime): retire
    `.github/workflows/deploy.yml` and, in repo Settings → Pages, disable
@@ -768,3 +769,22 @@ Local deploys (`npm run deploy:cloudflare`) still work fine from a real
 machine outside the sandboxed proxy, if you ever need one — just export
 `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID` if needed) in that
 shell first.
+
+## 18. Custom domain — AWS S3 + CloudFront, not Cloudflare
+
+`nextstop.airestop.co.uk/stopspotter` is served from AWS, independently of
+the Cloudflare hosting above — see
+[`docs/AWS_CUSTOM_DOMAIN_HANDOFF.md`](AWS_CUSTOM_DOMAIN_HANDOFF.md) for the
+full one-time setup (written for whoever has AWS account access to run
+it) and `.github/workflows/deploy-aws.yml` for the deploy that runs on
+every push once that setup is done.
+
+Why not a Cloudflare custom domain: `airestop.co.uk` is hosted on AWS
+Route 53, and the project doesn't want to move it. A Workers custom domain
+needs an active Cloudflare zone for the hostname, and on a Free plan that
+can only be a bare apex domain — onboarding just a subdomain while the
+parent stays elsewhere is Business/Enterprise-plan-gated. Since StopSpotter
+has no server-side Worker code (same static SPA throughout), there was no
+real need to route production through Cloudflare at all — it was only ever
+solving "deploy from a private repo for free," which GitHub Actions
+deploying straight to AWS solves equally well.

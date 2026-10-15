@@ -1,0 +1,50 @@
+name: Deploy to AWS (S3 + CloudFront)
+
+# Serves https://nextstop.airestop.co.uk/stopspotter — see
+# docs/AWS_CUSTOM_DOMAIN_HANDOFF.md for the one-time AWS setup this
+# workflow depends on (S3 bucket, CloudFront distribution, IAM OIDC role,
+# and the repo variables referenced below).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for AWS OIDC — no long-lived AWS keys stored in GitHub
+  contents: read
+
+concurrency:
+  group: aws
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:aws
+        env:
+          # Same secrets deploy.yml/deploy-cloudflare.yml use — see
+          # docs/SETUP.md §17/§18. Build-time only: Vite inlines these.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_SSO_ENABLED: ${{ vars.VITE_SSO_ENABLED }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Sync build to S3 under the /stopspotter prefix
+        run: |
+          aws s3 sync dist/ "s3://${{ vars.AWS_S3_BUCKET }}/stopspotter/" --delete
+      - name: Invalidate CloudFront cache for /stopspotter/*
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/stopspotter/*"
