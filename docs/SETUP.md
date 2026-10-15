@@ -727,31 +727,44 @@ time (`vite build --base=/`) rather than touching the shared config file.
 
 ### Setting it up
 
+Deploys run through `.github/workflows/deploy-cloudflare.yml` on GitHub's
+own runners — **not** from a local machine or a Claude Code cloud session.
+(A cloud session's network proxy authenticates Cloudflare API calls by
+injecting a single static token into every request to `api.cloudflare.com`,
+which collides with the short-lived upload JWT Cloudflare's asset-upload API
+swaps in for the file-upload step — see
+[`docs/CLOUDFLARE_MIGRATION_PLAN.md`](CLOUDFLARE_MIGRATION_PLAN.md) for how
+this was diagnosed. GitHub's runners don't sit behind that proxy, so the
+same `wrangler deploy` just works there.)
+
 1. **Create an API token**: [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
    → Create Token → custom token with **Account → Cloudflare Pages →
    Edit** (Workers deploys still use this scope) and **Account → Account
    Settings → Read**.
-2. Set it locally as `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID`,
-   from the Cloudflare dashboard's right sidebar on any domain/account
-   page, if the token's account can't be inferred automatically), then:
-   ```bash
-   npm run deploy:cloudflare
-   ```
-   This runs `build:cloudflare` then `wrangler deploy`. First deploy
-   creates the Worker and gives you a `*.workers.dev` URL to test against.
-3. **Custom domain**: Cloudflare dashboard → Workers & Pages → this
+2. In the repo's Settings → Secrets and variables → Actions:
+   - Add `CLOUDFLARE_API_TOKEN` as a **secret**.
+   - Add `CLOUDFLARE_ACCOUNT_ID` (from the Cloudflare dashboard's right
+     sidebar on any domain/account page) as a **variable**, not a secret —
+     it's not sensitive, same as `VITE_SSO_ENABLED` below.
+   - Confirm `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and (if used)
+     `VITE_GOOGLE_MAPS_API_KEY` are already set as secrets — `deploy.yml`
+     needs these too, so they're likely already there.
+3. Push to `main`, or run the workflow manually (Actions tab →
+   "Deploy to Cloudflare Workers" → Run workflow). First run creates the
+   Worker and Cloudflare assigns it a `*.workers.dev` URL — check the
+   workflow's Cloudflare step output, or the dashboard, for it, then open
+   it and confirm the app actually loads and talks to Supabase.
+4. **Custom domain**: Cloudflare dashboard → Workers & Pages → this
    worker → Settings → Domains & Routes → Add a custom domain. For a
    subdomain of a zone already on Cloudflare, this is immediate; for one
    that isn't, Cloudflare walks through the DNS changes needed.
-4. **Environment variables** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
-   etc. — same ones `deploy.yml` sets today) need to exist at **build**
-   time, not runtime, since Vite inlines them into the bundle — export
-   them in whatever shell runs `npm run deploy:cloudflare`, or wire this
-   into a CI job (e.g. a GitHub Actions workflow calling `wrangler deploy`
-   with `CLOUDFLARE_API_TOKEN` as a repo secret) once this is confirmed
-   working by hand.
 5. **Once Cloudflare is confirmed serving correctly** (not before — this
    keeps the live GitHub Pages site intact in the meantime): retire
    `.github/workflows/deploy.yml` and, in repo Settings → Pages, disable
    GitHub Pages. Only then does making the repo private stop being a risk
    to the live site.
+
+Local deploys (`npm run deploy:cloudflare`) still work fine from a real
+machine outside the sandboxed proxy, if you ever need one — just export
+`CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_ACCOUNT_ID` if needed) in that
+shell first.

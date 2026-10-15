@@ -31,43 +31,66 @@ Vercel).
 
 ## Quick start for a fresh session
 
+**Deploys go through GitHub Actions now (`.github/workflows/deploy-cloudflare.yml`),
+not `wrangler deploy` run directly from a cloud session.** See "Why `wrangler
+deploy` doesn't work from inside a cloud session" below before trying the
+old manual-CLI approach again — it's a structural proxy conflict, not a
+missing credential, and re-attempting it from here will reliably 401 at the
+same step every time.
+
 If you've just been handed this task cold, do this, in order:
 
-1. **Check whether the blockers below are actually resolved yet** — the
-   user may still be mid-setup. Try step 4 directly; if it fails with a
-   network or auth error, the relevant item in "What's blocking" hasn't
-   taken effect yet (both require a NEW session after being set — if
-   THIS session was already running when they were added, you also need
-   a new session, not just a retry).
-2. Confirm you're in `/home/user/stopspotter` on `main`, up to date
+1. Confirm you're in `/home/user/StopSpotter` on `main`, up to date
    (`git pull --ff-only`).
-3. Build with real env vars (these are safe to use directly — the anon
-   key is designed to be public, protected by RLS, not secrecy):
-   ```bash
-   export VITE_SUPABASE_URL='https://pqnvbikuulofuypzyhxa.supabase.co'
-   export VITE_SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxbnZiaWt1dWxvZnV5cHp5aHhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NTMyMDAsImV4cCI6MjEwNzUyOTIwMH0.IsGAoQJsezdutvIdAcACd6WbMc62KfL7_pftVD7qWNg'
-   npm run build:cloudflare
-   ```
-   (If these ever need refreshing: `mcp__Supabase__get_project_url` /
-   `get_publishable_keys` on project `pqnvbikuulofuypzyhxa`.)
-4. Deploy:
-   ```bash
-   npx wrangler deploy
-   ```
-   First deploy creates the Worker and prints a `*.workers.dev` URL —
-   open it and check the app actually loads and talks to Supabase (not
-   just that the deploy command exits 0).
+2. Check whether the user has added the required GitHub Actions secrets/vars
+   yet (`CLOUDFLARE_API_TOKEN` secret, `CLOUDFLARE_ACCOUNT_ID` variable —
+   see `docs/SETUP.md` §17 step 2). You can't read these from here; ask if
+   unclear.
+3. Trigger the workflow — push to `main`, or from the Actions tab run
+   "Deploy to Cloudflare Workers" manually. This isn't a PR, so the usual
+   PR-activity subscription doesn't apply — check the Actions tab run log
+   directly, or ask the user to confirm it went green.
+4. First successful run creates the Worker and Cloudflare assigns a
+   `*.workers.dev` URL (visible in the workflow's wrangler-action step
+   output or the Cloudflare dashboard). Open it and confirm the app loads
+   and talks to Supabase — not just that the workflow run is green.
 5. If it works: tell the user the `*.workers.dev` URL, then move to
    "Custom domain" and "Cutover" below. **Do not** touch
    `vite.config.ts`, `deploy.yml`, or GitHub Pages settings yet — see
    "Cutover sequencing", that's a deliberate later step, not part of
    getting Cloudflare working.
-6. If it fails: read the actual error before guessing. A proxy/network
-   error means the Allowed-domains change hasn't taken effect (needs a
-   new session). An auth error means the credential either isn't set, is
-   scoped to the wrong host, or also needs a new session. Don't ask the
-   user to paste a token into chat to work around it — see "What NOT to
-   do" below.
+6. If the workflow run fails: read its log — this is an ordinary GitHub
+   Actions failure (missing secret, build error, wrangler error) with no
+   proxy involved, so standard debugging applies. Don't ask the user to
+   paste a token into chat to work around it — see "What NOT to do" below.
+
+### Why `wrangler deploy` doesn't work from inside a cloud session
+
+Diagnosed 2026-10-15: running `npm run build:cloudflare && npx wrangler
+deploy` directly in a Claude Code cloud session gets past account lookup,
+subdomain setup, and starting the asset-upload session (all 200 OK), then
+fails with a `401 Unauthorized` on every retry of the actual file-upload
+step (`POST .../workers/assets/upload`), with `wrangler deploy` never
+completing.
+
+Per Cloudflare's own docs, that one step is the odd one out: every other
+Workers API call authenticates with the static account API token, but file
+uploads must use a short-lived JWT returned by the preceding
+`assets-upload-session` call instead. This cloud session's outbound-network
+proxy authenticates calls to `api.cloudflare.com` by injecting the stored
+`CLOUDFLARE_API_TOKEN` into every request to that host — which would
+clobber exactly that one swapped-in JWT, and nothing else. That lines up
+with everything observed (every token-authenticated call succeeds; only the
+JWT-authenticated call fails, every time). The actual header contents
+aren't inspectable from inside the session (secrets are deliberately walled
+off), so this can't be proven with 100% certainty from here, but there's no
+other plausible explanation and no amount of re-trying or re-issuing the
+token will fix it — **don't spend more time on that path.**
+
+This would block any tool run from inside a session like this one (not just
+wrangler) for any Worker that has static assets. GitHub Actions runners
+don't sit behind this proxy, so the same deploy works fine from there —
+hence the move to `deploy-cloudflare.yml`.
 
 ---
 
@@ -82,14 +105,17 @@ If you've just been handed this task cold, do this, in order:
 | Config validated with `wrangler deploy --dry-run` — read 10 files from `dist/`, accepted with no bindings | ✅ |
 | `docs/SETUP.md` §17 written (full how-to) | ✅ |
 | Repo-split prerequisite done: title-tile build pipeline moved to `jamspr95/stopspotter-title-tiles` (separate concern, but was also blocking "go private" — see that repo and `docs/TITLE_BOUNDARY_API_PLAN.md`) | ✅ |
+| Diagnosed why `wrangler deploy` 401s from inside a cloud session (proxy's Cloudflare credential injection collides with the asset-upload JWT swap) — see "Why `wrangler deploy` doesn't work..." above | ✅ |
+| `.github/workflows/deploy-cloudflare.yml` added — deploys from GitHub's runners instead, sidestepping the proxy conflict entirely | ✅ |
+| `docs/SETUP.md` §17 rewritten for the GitHub Actions deploy path | ✅ |
 
-## What's blocking (🔄, needs the user + a new session)
+## What's blocking (🔄, needs the user)
 
 | Task | Status |
 |---|---|
-| Cloudflare account API token, scoped as a **Bearer** credential to `api.cloudflare.com`, added via this session's environment settings (**Network secrets** / "API credentials" in an older app build) — not pasted into chat (a token WAS briefly pasted into chat earlier in the session that set this up; it should have been revoked/rolled in the Cloudflare dashboard after, worth confirming with the user if picking this up fresh) | 🔄 user reports done, unverified from a fresh session |
-| Network access: `api.cloudflare.com` (and ideally `sparrow.cloudflare.com`, Cloudflare's telemetry endpoint — not required, but avoids a harmless warning) added to this environment's allowed outbound hosts | 🔄 user reports done, unverified from a fresh session |
-| `CLOUDFLARE_ACCOUNT_ID` as a **plain environment variable** (not a credential — it's not secret, so it doesn't belong in the Bearer-credential form above; needs its own slot in the environment settings) | ⬜ **last known status: user hadn't located where to add this.** Try the deploy without it first — `wrangler` can often auto-detect the account when the token only has access to one, so this may turn out to be unnecessary |
+| `CLOUDFLARE_API_TOKEN` added as a GitHub Actions **secret** (repo Settings → Secrets and variables → Actions) — custom token scoped to **Account → Cloudflare Pages → Edit** + **Account → Account Settings → Read** | ⬜ |
+| `CLOUDFLARE_ACCOUNT_ID` added as a GitHub Actions **variable** (not a secret — same tab, Variables sub-tab) | ⬜ |
+| First `deploy-cloudflare.yml` run, triggered by push to `main` or manually from the Actions tab, confirmed green and the resulting `*.workers.dev` URL confirmed actually serving the app (not just a green run) | ⬜ |
 
 ## Custom domain (after the Worker is confirmed live)
 
@@ -137,10 +163,11 @@ GitHub Pages immediately, before Cloudflare is confirmed working.
 ## What NOT to do
 
 - **Never ask the user to paste a Cloudflare API token (or any secret)
-  into chat.** This happened once already this session, by mistake —
-  the token had to be treated as compromised and the user was asked to
-  revoke and reissue it via the environment's Network secrets instead.
-  Use the environment's secrets mechanism from the start.
+  into chat.** This happened once already this session, by mistake — the
+  token had to be treated as compromised and reissued. The token now
+  lives as a GitHub Actions secret (repo Settings → Secrets and variables
+  → Actions), added by the user directly in GitHub's UI — never pasted
+  to Claude, in chat or otherwise.
 - **Don't change `vite.config.ts`'s `base`** until Cutover step 3.
 - **Don't retire `deploy.yml` or disable GitHub Pages** before Cloudflare
   is confirmed actually serving the app correctly — not just that
