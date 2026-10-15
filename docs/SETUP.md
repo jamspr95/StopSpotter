@@ -698,6 +698,12 @@ geospatial check, not a text one, and isn't built.
 
 ## 17. Cloudflare Workers hosting (replacing GitHub Pages)
 
+> **Status and next steps**: see
+> [`docs/CLOUDFLARE_MIGRATION_PLAN.md`](CLOUDFLARE_MIGRATION_PLAN.md) —
+> that doc tracks where this migration actually stands and has a
+> quick-start for picking it back up in a fresh session. This section is
+> the how-to it summarises.
+
 Why: this repo is moving to **private** before launch, and GitHub Pages
 only serves a site from a **private** repo on GitHub Pro/Team/Enterprise
 — never Free, custom domain or not. Cloudflare Workers (with static
