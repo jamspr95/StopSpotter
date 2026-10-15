@@ -108,14 +108,14 @@ hence the move to `deploy-cloudflare.yml`.
 | Diagnosed why `wrangler deploy` 401s from inside a cloud session (proxy's Cloudflare credential injection collides with the asset-upload JWT swap) — see "Why `wrangler deploy` doesn't work..." above | ✅ |
 | `.github/workflows/deploy-cloudflare.yml` added — deploys from GitHub's runners instead, sidestepping the proxy conflict entirely | ✅ |
 | `docs/SETUP.md` §17 rewritten for the GitHub Actions deploy path | ✅ |
+| `CLOUDFLARE_API_TOKEN` secret + `CLOUDFLARE_ACCOUNT_ID` variable added by the user — confirmed working: auth succeeded and all 8 assets uploaded on the first real attempt | ✅ |
+| Removed `public/_redirects` (`/* /index.html 200`) — leftover from an earlier classic-Pages-era attempt, not used by GitHub Pages, and it broke the Workers deploy with "Infinite loop detected" (code 100324) because it duplicates what `wrangler.jsonc`'s `not_found_handling: "single-page-application"` already does. Confirmed via Cloudflare's own Pages→Workers migration docs that `not_found_handling` alone is the complete replacement | ✅ |
 
 ## What's blocking (🔄, needs the user)
 
 | Task | Status |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` added as a GitHub Actions **secret** (repo Settings → Secrets and variables → Actions) — custom token scoped to **Account → Cloudflare Pages → Edit** + **Account → Account Settings → Read** | ⬜ |
-| `CLOUDFLARE_ACCOUNT_ID` added as a GitHub Actions **variable** (not a secret — same tab, Variables sub-tab) | ⬜ |
-| First `deploy-cloudflare.yml` run, triggered by push to `main` or manually from the Actions tab, confirmed green and the resulting `*.workers.dev` URL confirmed actually serving the app (not just a green run) | ⬜ |
+| Re-run `deploy-cloudflare.yml` after the `_redirects` removal lands on `main`, confirm it goes green, and confirm the resulting `*.workers.dev` URL actually serves the app and talks to Supabase (not just a green run) | ⬜ |
 
 ## Custom domain (after the Worker is confirmed live)
 
