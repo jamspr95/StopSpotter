@@ -29,6 +29,13 @@ const suggestedIcon = L.divIcon({
   iconAnchor: [14, 14],
 })
 
+// Leaflet's options merge does `for (const i in options) obj.options[i] =
+// options[i]` — a key present with value `undefined` overwrites the
+// Marker's built-in default icon instance with literal `undefined`
+// (not a no-op like omitting the prop would be), crashing _initIcon. So
+// every Marker below needs a real icon object, never `icon={undefined}`.
+const defaultIcon = new L.Icon.Default()
+
 function ViewportTracker({ onMove }: { onMove: (centre: LatLng, zoom: number) => void }) {
   useMapEvents({
     moveend: (e) => {
@@ -91,7 +98,7 @@ export function MapScreen() {
           />
         ))}
         {nominations.map((n) => (
-          <Marker key={n.id} position={n.public} icon={n.source === 'site_finder' ? suggestedIcon : undefined}>
+          <Marker key={n.id} position={n.public} icon={n.source === 'site_finder' ? suggestedIcon : defaultIcon}>
             <Popup>
               <div className="text-sm">
                 {n.source === 'site_finder' && (
