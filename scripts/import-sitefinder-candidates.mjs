@@ -31,22 +31,33 @@
 // to_nomination_row() and dumping the list) is SiteFinder's own concern,
 // not this one's — see that repo's integration/stopspotter/README.md.
 //
-// 200m match/merge (docs/PROJECT_PLAN.md point 4, "Matches merge"): for
-// each candidate, find_nearby_nomination() (supabase/migrations/0001_init.sql)
-// checks for an existing row within 200m before deciding insert vs merge.
-//   - No match → insert a new source='site_finder' row, status='under_review'.
-//   - Match on a source='site_finder' row → refresh in place (this is the
-//     same candidate re-exported after a later SiteFinder pipeline run).
-//     Every SiteFinder-owned field is overwritten with the latest scan;
-//     status is left alone (an admin may already have triaged it).
-//   - Match on a source='user' or 'both' row → merge: source becomes
-//     'both', SiteFinder's own dedicated columns (site_finder_score and
-//     friends) are always refreshed, but the human-form fields
-//     (place_type, owner_type, nearest_house, slope, room_for_five, water,
-//     pay_band, why_here, ownership_hint) are only ever filled in where
-//     they're still null — a real human's own answer is never
-//     overwritten by an automated scan. Location, status, criteria_score
-//     and votes are untouched; they belong to the human nomination.
+// Matching (supabase/migrations/0022_site_finder_cluster_dedup.sql):
+//   1. candidate.site_finder_candidate_id (a stable hash from
+//      stopspotter_export.py - centroid+owner+property) is checked for an
+//      EXACT match first. A hit means this is the same real site,
+//      re-exported after a later SiteFinder pipeline run → refresh in
+//      place. Every SiteFinder-owned field is overwritten with the latest
+//      scan; status is left alone (an admin may already have triaged it).
+//   2. No id match → fall back to find_nearby_nomination()'s 200m
+//      proximity check, which now decides only two things:
+//        - Match on a source='user' or 'both' row → merge: source becomes
+//          'both', SiteFinder's own dedicated columns are always
+//          refreshed, but the human-form fields (place_type, owner_type,
+//          nearest_house, slope, room_for_five, water, pay_band, why_here,
+//          ownership_hint) are only ever filled in where they're still
+//          null — a real human's own answer is never overwritten by an
+//          automated scan. Location, status, criteria_score and votes are
+//          untouched; they belong to the human nomination.
+//        - Match on a source='site_finder' row with NO id match → this is
+//          a genuinely DIFFERENT real site that happens to be within
+//          200m, not the same one re-scanned (real case, Edinburgh, 16
+//          Oct 2026: two of 19 candidates were this close together and
+//          got wrongly collapsed into one row before this fix existed).
+//          Inserted as its own new row — never merged, never overwritten
+//          — with cluster_root_id pointing at the other row, so both stay
+//          independently visible to an admin while public_nominations
+//          shows just one pin for the pair, in the general area.
+//        - No match at all → plain insert, no cluster_root_id.
 
 import { createClient } from '@supabase/supabase-js'
 import { readFile } from 'node:fs/promises'
@@ -96,6 +107,7 @@ function candidateToColumns(c) {
   for (const f of [...HUMAN_FORM_FIELDS, ...SITE_FINDER_FIELDS, 'nearby']) {
     row[f] = c[f] ?? null
   }
+  row.site_finder_candidate_id = c.site_finder_candidate_id ?? null
   row.exact_location = toWKT(c.exact_lat, c.exact_lng)
   row.public_location = toWKT(c.public_lat, c.public_lng)
   if (row.nearby == null) row.nearby = []
@@ -105,6 +117,35 @@ function candidateToColumns(c) {
 }
 
 async function importOne(client, candidate, log) {
+  const candidateId = candidate.site_finder_candidate_id ?? null
+
+  // 1. Same real site, re-scanned by a later pipeline run? A stable id
+  // match means yes, regardless of distance — refresh in place, same as
+  // the old site_finder-vs-site_finder proximity match used to, but
+  // without proximity ever risking a false positive against a genuinely
+  // different nearby site.
+  if (candidateId) {
+    const { data: idMatches, error: idMatchError } = await client
+      .from('nominations')
+      .select('id')
+      .eq('site_finder_candidate_id', candidateId)
+      .limit(1)
+    if (idMatchError) throw idMatchError
+    const idMatch = idMatches?.[0] ?? null
+    if (idMatch) {
+      const refresh = candidateToColumns(candidate)
+      delete refresh.status // admin triage state, if any, is preserved
+      const { error } = await client.from('nominations').update(refresh).eq('id', idMatch.id)
+      if (error) throw error
+      log.refreshed++
+      return
+    }
+  }
+
+  // 2. No id match — 200m proximity now only decides whether this
+  // attaches to a human nomination, or is a genuinely new site (possibly
+  // part of a cluster of nearby SiteFinder candidates, but never merged
+  // into one row with another candidate).
   const point = { lat: candidate.exact_lat, lng: candidate.exact_lng }
   const { data: matches, error: matchError } = await client.rpc('find_nearby_nomination', {
     pt: toWKT(point.lat, point.lng),
@@ -122,22 +163,27 @@ async function importOne(client, candidate, log) {
 
   const { data: existing, error: fetchError } = await client
     .from('nominations')
-    .select('id, source, ' + HUMAN_FORM_FIELDS.join(', '))
+    .select('id, source, cluster_root_id, ' + HUMAN_FORM_FIELDS.join(', '))
     .eq('id', match.id)
     .single()
   if (fetchError) throw fetchError
 
   if (existing.source === 'site_finder') {
-    const refresh = candidateToColumns(candidate)
-    delete refresh.status // admin triage state, if any, is preserved
-    const { error } = await client.from('nominations').update(refresh).eq('id', match.id)
+    // A DIFFERENT real site within 200m (its site_finder_candidate_id, if
+    // it has one, didn't match ours — step 1 already ruled out "same
+    // site"). Insert as its own fully visible row rather than clobbering
+    // existing's data; cluster_root_id links the two so the public map
+    // can still show just one pin for the pair, in the general area.
+    const row = candidateToColumns(candidate)
+    row.cluster_root_id = existing.cluster_root_id ?? existing.id
+    const { error } = await client.from('nominations').insert(row)
     if (error) throw error
-    log.refreshed++
+    log.clustered++
     return
   }
 
   // existing.source is 'user' or 'both' — merge, never clobbering a human answer.
-  const update = { source: 'both' }
+  const update = { source: 'both', site_finder_candidate_id: candidateId }
   for (const f of SITE_FINDER_FIELDS) update[f] = candidate[f] ?? null
   for (const f of HUMAN_FORM_FIELDS) {
     if (existing[f] == null && candidate[f] != null) update[f] = candidate[f]
@@ -165,7 +211,7 @@ async function main() {
   }
 
   const client = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-  const log = { inserted: 0, merged: 0, refreshed: 0, failed: 0 }
+  const log = { inserted: 0, merged: 0, refreshed: 0, clustered: 0, failed: 0 }
   const failures = []
 
   for (const candidate of candidates) {
@@ -179,7 +225,8 @@ async function main() {
 
   console.log(
     `Done: ${log.inserted} inserted, ${log.merged} merged into existing nominations (source='both'), ` +
-      `${log.refreshed} refreshed, ${log.failed} failed.`,
+      `${log.refreshed} refreshed, ${log.clustered} inserted as distinct sites near another SiteFinder candidate ` +
+      `(grouped for the public map, still independent admin rows), ${log.failed} failed.`,
   )
   if (failures.length > 0) {
     console.error('Failures:')
