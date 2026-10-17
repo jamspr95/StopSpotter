@@ -6,6 +6,7 @@ import type {
   AdminModerationReport,
   AdminNomination,
   NominationStatus,
+  SiteFinderSetting,
 } from '../types'
 
 export type AdminSessionStatus = 'checking' | 'signed_out' | 'not_admin' | 'admin'
@@ -20,6 +21,8 @@ interface AdminState {
   moderationLoading: boolean
   growthFeedback: AdminGrowthFeedback[]
   growthFeedbackLoading: boolean
+  siteFinderSettings: SiteFinderSetting[]
+  siteFinderSettingsLoading: boolean
   error: string | null
 
   checkSession: () => Promise<void>
@@ -39,6 +42,8 @@ interface AdminState {
     id: string,
     patch: { actioned?: boolean; crmSynced?: boolean },
   ) => Promise<void>
+  loadSiteFinderSettings: () => Promise<void>
+  updateSiteFinderSetting: (key: string, value: number) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -51,6 +56,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   moderationLoading: false,
   growthFeedback: [],
   growthFeedbackLoading: false,
+  siteFinderSettings: [],
+  siteFinderSettingsLoading: false,
   error: null,
 
   checkSession: async () => {
@@ -95,6 +102,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       nominations: [],
       moderationReports: [],
       growthFeedback: [],
+      siteFinderSettings: [],
     })
   },
 
@@ -181,6 +189,28 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     await db.adminUpdateGrowthFeedback(id, patch)
     set((s) => ({
       growthFeedback: s.growthFeedback.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+    }))
+  },
+
+  loadSiteFinderSettings: async () => {
+    set({ siteFinderSettingsLoading: true, error: null })
+    try {
+      const siteFinderSettings = await db.adminListSiteFinderSettings()
+      set({ siteFinderSettings, siteFinderSettingsLoading: false })
+    } catch (err) {
+      set({
+        siteFinderSettingsLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to load SiteFinder settings.',
+      })
+    }
+  },
+
+  updateSiteFinderSetting: async (key, value) => {
+    await db.adminUpdateSiteFinderSetting(key, value)
+    set((s) => ({
+      siteFinderSettings: s.siteFinderSettings.map((setting) =>
+        setting.key === key ? { ...setting, value } : setting,
+      ),
     }))
   },
 }))

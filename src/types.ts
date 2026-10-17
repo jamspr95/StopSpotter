@@ -199,6 +199,17 @@ export interface AdminGrowthFeedback {
   createdAt: string
 }
 
+export interface SiteFinderSetting {
+  key: string
+  value: number
+  groupName: string
+  label: string
+  description: string | null
+  unit: string | null
+  defaultValue: number
+  updatedAt: string
+}
+
 export interface AdminModerationReport {
   id: string
   nominationId: string

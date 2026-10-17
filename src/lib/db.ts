@@ -15,6 +15,7 @@ import type {
   NominationAnswers,
   NominationStatus,
   PayBand,
+  SiteFinderSetting,
   TitleGeometry,
   Vote,
 } from '../types'
@@ -785,6 +786,40 @@ export async function adminUpdateGrowthFeedback(
     p_id: id,
     p_actioned: patch.actioned ?? null,
     p_crm_synced: patch.crmSynced ?? null,
+  })
+  if (error) throw error
+}
+
+interface SiteFinderSettingRow {
+  key: string
+  value: number
+  group_name: string
+  label: string
+  description: string | null
+  unit: string | null
+  default_value: number
+  updated_at: string
+}
+
+export async function adminListSiteFinderSettings(): Promise<SiteFinderSetting[]> {
+  const { data, error } = await client().rpc('admin_list_site_finder_settings')
+  if (error) throw error
+  return (data as SiteFinderSettingRow[]).map((row) => ({
+    key: row.key,
+    value: row.value,
+    groupName: row.group_name,
+    label: row.label,
+    description: row.description,
+    unit: row.unit,
+    defaultValue: row.default_value,
+    updatedAt: row.updated_at,
+  }))
+}
+
+export async function adminUpdateSiteFinderSetting(key: string, value: number): Promise<void> {
+  const { error } = await client().rpc('admin_update_site_finder_setting', {
+    p_key: key,
+    p_value: value,
   })
   if (error) throw error
 }

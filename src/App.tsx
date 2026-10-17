@@ -7,6 +7,7 @@ import { AdminLoginScreen } from './screens/admin/AdminLoginScreen'
 import { AdminModerationScreen } from './screens/admin/AdminModerationScreen'
 import { AdminReportsScreen } from './screens/admin/AdminReportsScreen'
 import { AdminReviewScreen } from './screens/admin/AdminReviewScreen'
+import { AdminSiteFinderSettingsScreen } from './screens/admin/AdminSiteFinderSettingsScreen'
 import { AdminStopDetailScreen } from './screens/admin/AdminStopDetailScreen'
 import { AdminStopsScreen } from './screens/admin/AdminStopsScreen'
 import { DoneShareScreen } from './screens/DoneShareScreen'
@@ -51,6 +52,7 @@ export function App() {
           <Route path="moderation" element={<AdminModerationScreen />} />
           <Route path="growth" element={<AdminGrowthScreen />} />
           <Route path="reports" element={<AdminReportsScreen />} />
+          <Route path="site-finder-settings" element={<AdminSiteFinderSettingsScreen />} />
         </Route>
       </Routes>
     </>
