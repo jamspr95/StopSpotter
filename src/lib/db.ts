@@ -823,3 +823,20 @@ export async function adminUpdateSiteFinderSetting(key: string, value: number): 
   })
   if (error) throw error
 }
+
+/**
+ * "Sync to SiteFinder now" — dispatches that repo's
+ * sync-config-from-stopspotter.yml workflow (trigger-site-finder-sync
+ * Edge Function) instead of waiting for its 6-hourly schedule. This only
+ * confirms GitHub ACCEPTED the request — there's no run id to poll, so
+ * the caller has no way to know when (or whether) it actually finishes;
+ * AdminSiteFinderSettingsScreen's own note tells the admin as much.
+ */
+export async function triggerSiteFinderSync(): Promise<void> {
+  const { data, error } = await client().functions.invoke<{ dispatched?: boolean; error?: string }>(
+    'trigger-site-finder-sync',
+    { method: 'POST' },
+  )
+  if (error) throw error
+  if (!data?.dispatched) throw new Error(data?.error ?? 'Sync request was not accepted.')
+}

@@ -44,6 +44,7 @@ interface AdminState {
   ) => Promise<void>
   loadSiteFinderSettings: () => Promise<void>
   updateSiteFinderSetting: (key: string, value: number) => Promise<void>
+  syncSiteFinderNow: () => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -212,5 +213,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         setting.key === key ? { ...setting, value } : setting,
       ),
     }))
+  },
+
+  syncSiteFinderNow: async () => {
+    await db.triggerSiteFinderSync()
   },
 }))

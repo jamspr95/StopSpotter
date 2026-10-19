@@ -462,6 +462,45 @@ To import a batch of SiteFinder candidates:
    under-review candidate is never shown to the public, matching
    `docs/PROJECT_PLAN.md`'s "released in small batches per area".
 
+### 12a. SiteFinder settings sync (one-time setup)
+
+`/admin/site-finder-settings` lets an admin edit SiteFinder's own scoring
+thresholds (migration `0023_site_finder_settings.sql`) without touching
+that repo's YAML by hand. An edit there doesn't reach SiteFinder on its
+own — the "Sync to SiteFinder now" button on that screen calls the
+`trigger-site-finder-sync` Edge Function, which asks GitHub to run that
+repo's `sync-config-from-stopspotter.yml` workflow (it also runs on its
+own every 6 hours as a safety net, in case the button is never used).
+
+Two things need setting up once, by someone with admin on both repos —
+neither is something this assistant can do for you, since both involve a
+real credential that should never be pasted into a chat:
+
+1. **On the SiteFinder GitHub repo** (`jamspr95/SiteFinder` → Settings →
+   Secrets and variables → Actions → "New repository secret"), add:
+   - `SUPABASE_URL` — this project's URL (Dashboard → Settings → API)
+   - `SUPABASE_SERVICE_ROLE_KEY` — this project's `service_role` key
+     (same key as step 2 above — never the anon key)
+
+   Without these, the workflow runs but fails at the "pull current
+   settings" step, every time (schedule or button) — check that repo's
+   Actions tab if the button never seems to do anything.
+
+2. **A GitHub token for this function to dispatch that workflow.** The
+   button calls GitHub's API from outside any GitHub Actions run, so it
+   needs its own token — create a fine-grained personal access token
+   (GitHub → Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens) scoped to **only** the `jamspr95/SiteFinder`
+   repository, with **Actions: Read and write** permission and nothing
+   else. Then add it as this Supabase project's `GITHUB_PAT_SITE_FINDER_SYNC`
+   Edge Function secret (Dashboard → Edge Functions → Secrets, or
+   `supabase secrets set GITHUB_PAT_SITE_FINDER_SYNC=... --project-ref <ref>`
+   from the Supabase CLI). Without this, the button shows a clear "not
+   configured yet" message rather than failing silently.
+
+Until both are set up, editing a setting still saves it to the database
+fine — it just has no way to reach the real YAML files yet.
+
 ## 13. Pannable satellite + Street View on admin screens (optional, free)
 
 The swipe-review queue (`/admin/review`) and the full stop-detail screen
