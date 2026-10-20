@@ -436,6 +436,53 @@ real credential that should never be pasted into a chat:
 Until both are set up, editing a setting still saves it to the database
 fine — it just has no way to reach the real YAML files yet.
 
+### 12b. SiteFinder search — staging + approve (Milestone 3)
+
+`/admin/site-finder-search` replaces SiteFinder's own standalone map/
+search page (that repo's `web/app.py`) with one portal: every pipeline
+candidate SiteFinder has ever found lands in a staging table
+(`site_finder_raw_candidates`, migration `0024_site_finder_raw_candidates.sql`)
+long before anyone decides it's worth pursuing, browsed/filtered/mapped
+from this screen, with an explicit **Approve** the only way a candidate
+ever reaches the live `nominations` table — unlike §12's import flow
+above, nothing here writes to `nominations` just by being previewed.
+
+To get candidates into that staging table:
+
+1. On the SiteFinder side (`jamspr95/sitefinder` repo), run the pipeline
+   with the newer export flag:
+   ```bash
+   python3 scripts/run_pipeline.py --all \
+     --stopspotter-raw-export data/processed/raw-candidates.json
+   ```
+   This writes every result through `to_raw_candidate_row()`
+   (`src/sitefinder/stopspotter_export.py`) — untruncated reasons, the
+   real site boundary polygon, and fields the old `--stopspotter-export`
+   flow never carried (`utility_status`) — as one combined JSON array
+   across every area run.
+2. Using the same `service_role` key as §12 above (never the anon key —
+   this script also writes columns anon/authenticated can't touch), run:
+   ```bash
+   SUPABASE_URL=https://xxxxx.supabase.co \
+   SUPABASE_SERVICE_ROLE_KEY=eyJ... \
+   npm run sync:sitefinder-raw -- data/processed/raw-candidates.json
+   ```
+3. Open `/admin/site-finder-search`, filter by status/area/owner type,
+   click a candidate to see its full detail (reasons, score breakdown,
+   usable area, capacity, slope, road access, utilities) and its real
+   boundary on the map, then **Approve** or **Reject**.
+4. Approving calls `admin_approve_site_finder_candidate` — it reimplements
+   `scripts/import-sitefinder-candidates.mjs`'s own insert/refresh/
+   cluster/merge logic exactly (same stable `site_finder_candidate_id`
+   matching, same 200m proximity fallback, same "never overwrite a
+   human's own answer" rule), so an approved candidate lands in
+   `/admin/review`'s normal swipe-triage queue exactly as if it had come
+   through the old import script.
+5. Re-running the sync (step 2) after a later pipeline run updates each
+   candidate's underlying data in place — it never resets a candidate's
+   `pending`/`approved`/`rejected` status, so re-syncing is always safe to
+   do on a schedule or by hand, same spirit as §12a's settings sync.
+
 ## 13. Pannable satellite + Street View on admin screens (optional, free)
 
 The swipe-review queue (`/admin/review`) and the full stop-detail screen

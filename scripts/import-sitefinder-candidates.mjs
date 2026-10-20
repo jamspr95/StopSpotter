@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 // StopSpotter — SiteFinder candidate importer
 //
+// SUPERSEDED (20 Oct 2026) by the staging+approve flow —
+// scripts/sync-sitefinder-raw-candidates.mjs populates
+// site_finder_raw_candidates instead, and an admin explicitly approves
+// each one from /admin/site-finder-search (admin_approve_site_finder_candidate,
+// supabase/migrations/0024_site_finder_raw_candidates.sql reimplements
+// this script's own matching/merge logic exactly). Kept working and not
+// yet deleted: the newer flow hasn't carried real data through yet (see
+// jamspr95/sitefinder's integration/stopspotter/README.md "What's
+// genuinely still open"), same "flag before removing" convention as the
+// rest of this project.
+//
 // The receiving end of the "one shared targets table" integration
 // (docs/PROJECT_PLAN.md "Relationship to the site finder",
 // supabase/migrations/0013_site_finder_integration.sql). SiteFinder's own

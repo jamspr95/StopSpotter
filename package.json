@@ -11,6 +11,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "import:sitefinder": "node scripts/import-sitefinder-candidates.mjs",
+    "sync:sitefinder-raw": "node scripts/sync-sitefinder-raw-candidates.mjs",
     "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy"
   },
   "dependencies": {
