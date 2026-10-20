@@ -14,7 +14,10 @@ import type {
   Nomination,
   NominationAnswers,
   NominationStatus,
+  OwnerType,
   PayBand,
+  SiteFinderCandidateGeometry,
+  SiteFinderRawCandidate,
   SiteFinderSetting,
   TitleGeometry,
   Vote,
@@ -818,4 +821,112 @@ export async function triggerSiteFinderSync(): Promise<void> {
   )
   if (error) throw error
   if (!data?.dispatched) throw new Error(data?.error ?? 'Sync request was not accepted.')
+}
+
+// ── SiteFinder search (0024_site_finder_raw_candidates.sql) ──────────────
+// The admin-only preview/approve flow that replaces SiteFinder's own
+// separate web/app.py map — every pipeline candidate lands in
+// site_finder_raw_candidates (scripts/sync-sitefinder-raw-candidates.mjs,
+// run by hand after a SiteFinder pipeline run, same hand-off shape as the
+// settings sync), browsed here, and admin_approve_site_finder_candidate
+// is the only path from there into `nominations`.
+
+interface SiteFinderRawCandidateRow {
+  id: string
+  site_finder_candidate_id: string
+  area_key: string
+  area_label: string
+  exact_lat: number
+  exact_lng: number
+  site_boundary: SiteFinderCandidateGeometry | null
+  owner_type: OwnerType | null
+  owner_name: string | null
+  property_name: string | null
+  ownership_confidence_detail: 'high' | 'medium' | 'low' | 'unknown' | null
+  ownership_source: string | null
+  score: number | null
+  component_scores: Record<string, number>
+  flags: string[]
+  reasons: string[]
+  usable_area_m2: number | null
+  capacity_pitches: number | null
+  avg_slope_percent: number | null
+  slope_source: string | null
+  road_access: 'good' | 'fair' | 'poor' | 'unknown' | null
+  coast_distance_m: number | null
+  utility_status: string | null
+  nearby: string[]
+  status: 'pending' | 'approved' | 'rejected'
+  approved_nomination_id: string | null
+  rejected_reason: string | null
+  reviewed_at: string | null
+  first_seen_at: string
+  last_synced_at: string
+}
+
+function rowToSiteFinderRawCandidate(row: SiteFinderRawCandidateRow): SiteFinderRawCandidate {
+  return {
+    id: row.id,
+    siteFinderCandidateId: row.site_finder_candidate_id,
+    areaKey: row.area_key,
+    areaLabel: row.area_label,
+    exact: { lat: row.exact_lat, lng: row.exact_lng },
+    siteBoundary: row.site_boundary,
+    ownerType: row.owner_type,
+    ownerName: row.owner_name,
+    propertyName: row.property_name,
+    ownershipConfidenceDetail: row.ownership_confidence_detail,
+    ownershipSource: row.ownership_source,
+    score: row.score,
+    componentScores: row.component_scores ?? {},
+    flags: row.flags ?? [],
+    reasons: row.reasons ?? [],
+    usableAreaM2: row.usable_area_m2,
+    capacityPitches: row.capacity_pitches,
+    avgSlopePercent: row.avg_slope_percent,
+    slopeSource: row.slope_source,
+    roadAccess: row.road_access,
+    coastDistanceM: row.coast_distance_m,
+    utilityStatus: row.utility_status,
+    nearby: row.nearby ?? [],
+    status: row.status,
+    approvedNominationId: row.approved_nomination_id,
+    rejectedReason: row.rejected_reason,
+    reviewedAt: row.reviewed_at,
+    firstSeenAt: row.first_seen_at,
+    lastSyncedAt: row.last_synced_at,
+  }
+}
+
+/** p_status null (pass `null` through) lists every candidate regardless of status; default is 'pending'. */
+export async function adminListSiteFinderRawCandidates(
+  status: 'pending' | 'approved' | 'rejected' | null = 'pending',
+): Promise<SiteFinderRawCandidate[]> {
+  const { data, error } = await client().rpc('admin_list_site_finder_raw_candidates', { p_status: status })
+  if (error) throw error
+  return (data as SiteFinderRawCandidateRow[]).map(rowToSiteFinderRawCandidate)
+}
+
+/**
+ * Approves one candidate into `nominations` — insert, refresh, cluster, or
+ * merge, exactly mirroring scripts/import-sitefinder-candidates.mjs's own
+ * matching logic (see the RPC's own comment). Returns which of those four
+ * happened and the resulting nomination's id, so the UI can navigate there
+ * or just confirm.
+ */
+export async function adminApproveSiteFinderCandidate(
+  rawId: string,
+): Promise<{ nominationId: string; outcome: 'inserted' | 'refreshed' | 'clustered' | 'merged' }> {
+  const { data, error } = await client().rpc('admin_approve_site_finder_candidate', { p_raw_id: rawId })
+  if (error) throw error
+  const row = (data as Array<{ nomination_id: string; outcome: string }>)[0]
+  return { nominationId: row.nomination_id, outcome: row.outcome as 'inserted' | 'refreshed' | 'clustered' | 'merged' }
+}
+
+export async function adminRejectSiteFinderCandidate(rawId: string, reason?: string): Promise<void> {
+  const { error } = await client().rpc('admin_reject_site_finder_candidate', {
+    p_raw_id: rawId,
+    p_reason: reason ?? null,
+  })
+  if (error) throw error
 }

@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { to: '/admin/growth', label: 'Growth' },
   { to: '/admin/reports', label: 'Reports' },
   { to: '/admin/site-finder-settings', label: 'SiteFinder settings' },
+  { to: '/admin/site-finder-search', label: 'SiteFinder search' },
 ]
 
 /**

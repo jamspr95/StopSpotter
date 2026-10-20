@@ -6,6 +6,7 @@ import type {
   AdminModerationReport,
   AdminNomination,
   NominationStatus,
+  SiteFinderRawCandidate,
   SiteFinderSetting,
 } from '../types'
 
@@ -23,6 +24,9 @@ interface AdminState {
   growthFeedbackLoading: boolean
   siteFinderSettings: SiteFinderSetting[]
   siteFinderSettingsLoading: boolean
+  siteFinderRawCandidates: SiteFinderRawCandidate[]
+  siteFinderRawCandidatesLoading: boolean
+  siteFinderApprovingId: string | null
   error: string | null
 
   checkSession: () => Promise<void>
@@ -45,6 +49,9 @@ interface AdminState {
   loadSiteFinderSettings: () => Promise<void>
   updateSiteFinderSetting: (key: string, value: number) => Promise<void>
   syncSiteFinderNow: () => Promise<void>
+  loadSiteFinderRawCandidates: (status?: 'pending' | 'approved' | 'rejected' | null) => Promise<void>
+  approveSiteFinderCandidate: (rawId: string) => Promise<void>
+  rejectSiteFinderCandidate: (rawId: string, reason?: string) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -59,6 +66,9 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   growthFeedbackLoading: false,
   siteFinderSettings: [],
   siteFinderSettingsLoading: false,
+  siteFinderRawCandidates: [],
+  siteFinderRawCandidatesLoading: false,
+  siteFinderApprovingId: null,
   error: null,
 
   checkSession: async () => {
@@ -217,5 +227,53 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
 
   syncSiteFinderNow: async () => {
     await db.triggerSiteFinderSync()
+  },
+
+  loadSiteFinderRawCandidates: async (status = 'pending') => {
+    set({ siteFinderRawCandidatesLoading: true, error: null })
+    try {
+      const siteFinderRawCandidates = await db.adminListSiteFinderRawCandidates(status)
+      set({ siteFinderRawCandidates, siteFinderRawCandidatesLoading: false })
+    } catch (err) {
+      set({
+        siteFinderRawCandidatesLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to load SiteFinder candidates.',
+      })
+    }
+  },
+
+  approveSiteFinderCandidate: async (rawId) => {
+    set({ siteFinderApprovingId: rawId })
+    try {
+      await db.adminApproveSiteFinderCandidate(rawId)
+      // Approved candidates leave the default 'pending' list entirely -
+      // simplest correct way to reflect that without a second round trip
+      // is to just drop it from whatever's currently loaded.
+      set((s) => ({
+        siteFinderRawCandidates: s.siteFinderRawCandidates.filter((c) => c.id !== rawId),
+        siteFinderApprovingId: null,
+      }))
+    } catch (err) {
+      set({
+        siteFinderApprovingId: null,
+        error: err instanceof Error ? err.message : 'Failed to approve this candidate.',
+      })
+    }
+  },
+
+  rejectSiteFinderCandidate: async (rawId, reason) => {
+    set({ siteFinderApprovingId: rawId })
+    try {
+      await db.adminRejectSiteFinderCandidate(rawId, reason)
+      set((s) => ({
+        siteFinderRawCandidates: s.siteFinderRawCandidates.filter((c) => c.id !== rawId),
+        siteFinderApprovingId: null,
+      }))
+    } catch (err) {
+      set({
+        siteFinderApprovingId: null,
+        error: err instanceof Error ? err.message : 'Failed to reject this candidate.',
+      })
+    }
   },
 }))

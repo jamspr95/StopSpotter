@@ -210,6 +210,52 @@ export interface SiteFinderSetting {
   updatedAt: string
 }
 
+/** A real GeoJSON Polygon, as st_asgeojson() returns it for site_finder_raw_candidates.site_boundary. */
+export interface SiteFinderCandidateGeometry {
+  type: 'Polygon'
+  coordinates: number[][][]
+}
+
+/**
+ * One row from site_finder_raw_candidates (supabase/migrations/0024_site_finder_raw_candidates.sql)
+ * — a SiteFinder pipeline candidate not yet (or no longer) decided on.
+ * Distinct from AdminNomination: this is the PREVIEW/staging shape (full
+ * untruncated reasons, the real site boundary, no admin triage status of
+ * its own beyond pending/approved/rejected) — approving one creates or
+ * refreshes an AdminNomination via admin_approve_site_finder_candidate.
+ */
+export interface SiteFinderRawCandidate {
+  id: string
+  siteFinderCandidateId: string
+  areaKey: string
+  areaLabel: string
+  exact: LatLng
+  siteBoundary: SiteFinderCandidateGeometry | null
+  ownerType: OwnerType | null
+  ownerName: string | null
+  propertyName: string | null
+  ownershipConfidenceDetail: 'high' | 'medium' | 'low' | 'unknown' | null
+  ownershipSource: string | null
+  score: number | null
+  componentScores: Record<string, number>
+  flags: string[]
+  reasons: string[]
+  usableAreaM2: number | null
+  capacityPitches: number | null
+  avgSlopePercent: number | null
+  slopeSource: string | null
+  roadAccess: 'good' | 'fair' | 'poor' | 'unknown' | null
+  coastDistanceM: number | null
+  utilityStatus: string | null
+  nearby: string[]
+  status: 'pending' | 'approved' | 'rejected'
+  approvedNominationId: string | null
+  rejectedReason: string | null
+  reviewedAt: string | null
+  firstSeenAt: string
+  lastSyncedAt: string
+}
+
 export interface AdminModerationReport {
   id: string
   nominationId: string
