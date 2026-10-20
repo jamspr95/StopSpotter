@@ -87,26 +87,63 @@ type TitleFeature = Omit<TitleTileLine, 'c'>
 // per fine cell it belongs to, each line carrying its own fine cell id
 // ("c") — see jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs's writeParcelsToShardParts/
 // finalizeShards. There's no top-level index structure, so this filters
-// to the one fine cell actually asked for as it streams the lines; a
-// shard is small enough (FINE_CELLS_PER_SHARD^2 fine cells' worth) that
-// reading the whole decompressed text at once is fine — the real OOM
-// incident this format replaced was the BUILD side re-reading an
-// ever-growing shard on every council touch, not a one-off fetch here.
+// to the one fine cell actually asked for as it streams the lines.
+//
+// Real incident (20 Oct 2026): "Memory limit exceeded" on every real
+// lookup. A real shard checked directly is 186MB decompressed, 75,349
+// lines (england_wales_100_-10.json.gz) — the comment this replaced
+// ("a shard is small enough... reading the whole decompressed text at
+// once is fine") was simply never checked against real data. Buffering
+// that whole string via `.text()`, then JSON.parse-ing all 75,349 lines
+// into objects just to keep the handful matching one fine cell, blew
+// past the edge runtime's memory limit on its own - twice over, since
+// both nations' shards were fetched and buffered concurrently. The same
+// architectural mistake as the BUILD side's own earlier OOM incident
+// (accumulate-everything-before-filtering instead of processing
+// bounded pieces and discarding them) and SiteFinder's pipeline.py OOM,
+// just on the read side this time.
+//
+// Fixed by reading the decompressed stream in chunks and only ever
+// holding one in-progress line at a time, with a cheap substring check
+// before paying for a full JSON.parse on a line that can't match -
+// peak memory is now one line's worth, not one shard's worth.
 async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): Promise<TitleFeature[]> {
   const shardId = shardIdForCellId(cellId)
   const res = await fetch(`${TILE_BASE_URL}/${nation}_${shardId}.json.gz`)
   if (res.status === 404) return [] // no parcels in this shard for this nation — normal, not an error
   if (!res.ok) throw new Error(`Failed to fetch shard ${nation}/${shardId}: ${res.status}`)
   if (!res.body) return []
-  const decompressed = res.body.pipeThrough(new DecompressionStream('gzip'))
-  const text = await new Response(decompressed).text()
+
   const features: TitleFeature[] = []
-  for (const line of text.split('\n')) {
-    if (!line) continue
+  const needle = `"c":"${cellId}"`
+  const reader = res.body.pipeThrough(new DecompressionStream('gzip')).getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  function consumeLine(line: string) {
+    if (!line || !line.includes(needle)) return // cheap pre-check — skip the other ~24 fine cells' lines unparsed
     const parsed: TitleTileLine = JSON.parse(line)
-    if (parsed.c !== cellId) continue
+    if (parsed.c !== cellId) return // the substring check alone could coincidentally match inside other fields
     features.push({ type: parsed.type, properties: parsed.properties, geometry: parsed.geometry })
   }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let newlineIndex: number
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        consumeLine(buffer.slice(0, newlineIndex))
+        buffer = buffer.slice(newlineIndex + 1)
+      }
+    }
+    buffer += decoder.decode() // flush a trailing partial multi-byte sequence, if any
+    consumeLine(buffer)
+  } finally {
+    reader.releaseLock()
+  }
+
   return features
 }
 
