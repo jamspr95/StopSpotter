@@ -527,7 +527,10 @@ instead of pre-loading the whole country:
   goes private; see that repo's README — downloads the same free HMLR/RoS
   bulk files as the original design did, but instead of upserting into
   Postgres, splits them into gzipped NDJSON shard files ("tiles") and
-  publishes them as assets on a GitHub Release tagged `title-tiles-latest`
+  publishes them as assets across six GitHub Releases tagged
+  `title-tiles-latest-{ew,scotland}-{0,1,2}` (one release per nation per
+  latitude-mod-3 partition — see that repo's own `scripts/lib/titleTiles.mjs`
+  for why there's more than one release per nation)
   — **nothing is ever written to the database by this job**, so it can
   never repeat the disk-exhaustion failure.
 - `supabase/functions/lookup-title-boundary` — a Supabase Edge Function —
@@ -558,18 +561,38 @@ just shows "title not looked up yet" until an admin clicks the button.
 1. The schema (`0017_title_lookup_columns.sql`) and the Edge Function are
    already applied/deployed to the live project — no manual step needed
    for either.
-2. The build workflow lives entirely in
-   [`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles),
-   not this repo, and needs no Supabase secrets at all (it never touches
-   the database) — just GitHub's own built-in token, already available to
-   every workflow there.
-3. **Before trusting the schedule, run it once by hand**, in that other
+2. **Create a `TITLE_TILES_RELEASE_PAT` repo secret on
+   [`jamspr95/stopspotter-title-tiles`](https://github.com/jamspr95/stopspotter-title-tiles)**
+   — real incident (20 Oct 2026): a full `--all` run built and finalized
+   every shard correctly, but publishing failed partway through with
+   `403: API rate limit exceeded for installation` — the default
+   `GITHUB_TOKEN`'s own rate limit isn't enough for the ~3,900 individual
+   release-asset-upload calls NUM_RELEASE_PARTITIONS (3) × 2 nations now
+   needs. A real PAT gets the much higher standard authenticated-user
+   quota (5,000/hour) instead.
+   - **GitHub → Settings → Developer settings → Fine-grained tokens →
+     Generate new token.**
+   - Name it something recognisable, e.g. "title-tiles release publish".
+   - **Repository access** → **Only select repositories** →
+     `jamspr95/stopspotter-title-tiles` — nothing else.
+   - **Repository permissions** → **Contents** → **Read and write**.
+     Leave every other permission at **No access**.
+   - **Generate token** and copy it immediately — GitHub only shows it
+     once.
+   - On that repo: **Settings → Secrets and variables → Actions →
+     Secrets tab → New repository secret** → name `TITLE_TILES_RELEASE_PAT`,
+     paste the token, save.
+   - Without this, the workflow now fails fast (before the ~2-hour
+     build, not after) with a clear message naming this exact secret.
+3. The build workflow otherwise lives entirely in that other repo and
+   needs no Supabase secrets at all (it never touches the database).
+4. **Before trusting the schedule, run it once by hand**, in that other
    repo: Actions → "Build title boundary tiles" → Run workflow,
    optionally scoped to one council/county first via its `council`/
    `county` input. Check the run's log for a sensible parsed parcel
-   count, then check that repo's `title-tiles-latest` release (its
-   **Releases** page) actually has fresh assets attached.
-4. Once that release exists, click **"Look up title"** on any
+   count, then check that repo's `title-tiles-latest-{ew,scotland}-{0,1,2}`
+   releases (its **Releases** page) actually have fresh assets attached.
+5. Once those releases exist, click **"Look up title"** on any
    nomination's admin detail page in *this* app — it should return a
    result (a title number, or a genuine "no known owner") within a
    second or two.
