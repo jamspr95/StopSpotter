@@ -95,7 +95,26 @@ function toWKT(lat, lng) {
   return `SRID=4326;POINT(${lng} ${lat})`
 }
 
-function candidateToColumns(c) {
+// Real incident (20 Oct 2026): every imported SiteFinder candidate had
+// council_area = null — confirmed on the live table (17 real Edinburgh
+// rows, none with a council area, while every source='user' row had a
+// real one). candidateToColumns simply never set it; there's no column
+// in HUMAN_FORM_FIELDS/SITE_FINDER_FIELDS that covers it, and nothing
+// else in this script ever called council_area_for_point(), unlike
+// useAppStore's resolveCouncilArea() on the app side, which every human
+// nomination already goes through. Fixed by calling the same RPC this
+// Node script's own service-role client already has access to. Falls
+// back to null (not a guessed label — there's no equivalent of the
+// app's client-side guessCouncilArea() available here) if the point
+// doesn't land in any loaded boundary; the public view's own JS-side
+// placeholder already covers a null council_area sensibly either way.
+async function councilAreaForPoint(client, lat, lng) {
+  const { data, error } = await client.rpc('council_area_for_point', { pt: toWKT(lat, lng) })
+  if (error) throw error
+  return data ?? null
+}
+
+async function candidateToColumns(client, c) {
   // 'submitted', not 'under_review' — AdminReviewScreen's swipe-triage
   // queue (src/screens/admin/AdminReviewScreen.tsx) only pulls
   // status==='submitted'; 'under_review' is what a swipe *moves a row
@@ -110,6 +129,7 @@ function candidateToColumns(c) {
   row.site_finder_candidate_id = c.site_finder_candidate_id ?? null
   row.exact_location = toWKT(c.exact_lat, c.exact_lng)
   row.public_location = toWKT(c.public_lat, c.public_lng)
+  row.council_area = await councilAreaForPoint(client, c.exact_lat, c.exact_lng)
   if (row.nearby == null) row.nearby = []
   if (row.site_finder_flags == null) row.site_finder_flags = []
   if (row.site_finder_component_scores == null) row.site_finder_component_scores = {}
@@ -133,7 +153,7 @@ async function importOne(client, candidate, log) {
     if (idMatchError) throw idMatchError
     const idMatch = idMatches?.[0] ?? null
     if (idMatch) {
-      const refresh = candidateToColumns(candidate)
+      const refresh = await candidateToColumns(client, candidate)
       delete refresh.status // admin triage state, if any, is preserved
       const { error } = await client.from('nominations').update(refresh).eq('id', idMatch.id)
       if (error) throw error
@@ -155,7 +175,7 @@ async function importOne(client, candidate, log) {
   const match = matches?.[0] ?? null
 
   if (!match) {
-    const { error } = await client.from('nominations').insert(candidateToColumns(candidate))
+    const { error } = await client.from('nominations').insert(await candidateToColumns(client, candidate))
     if (error) throw error
     log.inserted++
     return
@@ -174,7 +194,7 @@ async function importOne(client, candidate, log) {
     // site"). Insert as its own fully visible row rather than clobbering
     // existing's data; cluster_root_id links the two so the public map
     // can still show just one pin for the pair, in the general area.
-    const row = candidateToColumns(candidate)
+    const row = await candidateToColumns(client, candidate)
     row.cluster_root_id = existing.cluster_root_id ?? existing.id
     const { error } = await client.from('nominations').insert(row)
     if (error) throw error
