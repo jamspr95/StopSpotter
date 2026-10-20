@@ -36,10 +36,6 @@ jobs:
           # Esri layer with no Street View until this is set, same pattern
           # as the two above.
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          # Not a secret (just a feature flag) — set as a repo VARIABLE
-          # (Settings -> Secrets and variables -> Actions -> Variables tab),
-          # not a secret, once SSO is actually configured in Supabase.
-          VITE_SSO_ENABLED: ${{ vars.VITE_SSO_ENABLED }}
       # GitHub Pages serves static files only — this lets client-side routes
       # (e.g. a direct load of /stop/:id) resolve instead of 404ing.
       - run: cp dist/index.html dist/404.html

@@ -290,7 +290,7 @@ rationale. Engineering implications:
 | Provision the real Supabase project and apply all migrations | ✅ Done — see Milestone 2's first row |
 | Add `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` as GitHub Actions repo secrets, so the deployed build talks to the real backend instead of running local-only | ⬜ External step, `docs/SETUP.md` §4 — can't be done from a coding session (no API access to repo secrets) |
 | Set up at least one real admin account (`docs/SETUP.md` §9) | ⬜ |
-| End-to-end test on a real phone against the live deployed site: nominate a stop, sign up via magic link (and SSO if configured), vote, check the admin dashboard | ⬜ This coding environment can't reach `*.supabase.co` or open a real inbox to do this itself — needs a human with a real browser, once the secrets above are set |
+| End-to-end test on a real phone against the live deployed site: nominate a stop, sign up via magic link, vote, check the admin dashboard | ⬜ This coding environment can't reach `*.supabase.co` or open a real inbox to do this itself — needs a human with a real browser, once the secrets above are set |
 | Final QA pass on mobile (primary device target) | ⬜ |
 | Publish one Facebook post to existing AireStop audience | ⬜ |
 | Monitor funnel (click → sign-up → nomination/vote) for 48h; fix blockers | ⬜ |

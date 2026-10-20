@@ -105,15 +105,11 @@ interface AppState {
   awaitingVerificationId: string | null
   awaitingVerificationKind: 'nomination' | 'vote' | 'growth_feedback' | 'sign_in' | null
   /**
-   * Real-backend mode only: which auth flow is in flight, until
-   * completePendingSignIn() runs and clears it back to null.
-   * 'magic_link' drives the "check your email" interim screen; 'oauth'
-   * doesn't need one (the browser already left the page for the
-   * provider's consent screen) but still needs a signal so the screen
-   * that remounts after the redirect knows a sign-in was in progress and
-   * should navigate to /done once it completes.
+   * Real-backend mode only: whether a magic-link sign-in is in flight,
+   * until completePendingSignIn() runs and clears it back to null — drives
+   * the "check your email" interim screen.
    */
-  authMethod: 'magic_link' | 'oauth' | null
+  authMethod: 'magic_link' | null
   /** True once initRealBackend()'s first fetch has resolved — screens can use this to show a loading state instead of an empty map. */
   backendReady: boolean
 
@@ -150,19 +146,6 @@ interface AppState {
   completePendingFlowAsCurrentUser: () => Promise<void>
   /** Local-only mode's simulated magic-link click. */
   confirmMagicLink: () => void
-  /**
-   * Real-backend mode only — there's no local-only equivalent (SSO
-   * inherently needs a real provider + backend), so SignUpScreen simply
-   * doesn't render these buttons when isSupabaseConfigured is false.
-   * Consent choices are captured now (before the browser navigates away)
-   * since pendingIdentity is all completePendingSignIn will have to work
-   * with on return — the email itself comes from the provider via the
-   * resulting session instead of from here.
-   */
-  signInWithSSO: (
-    provider: db.SSOProvider,
-    consent: { firstName?: string; news: boolean; support: boolean },
-  ) => Promise<void>
   /** Real-backend mode only: fetches the live nominations/votes feed and wires up auth. Call once at startup. */
   initRealBackend: () => Promise<void>
 }
@@ -613,18 +596,6 @@ export const useAppStore = create<AppState>()(
         // growth_feedback/sign_in: nothing local to flip — neither wrote anything to flip.
 
         set({ pendingFlow: null, awaitingVerificationId: null, awaitingVerificationKind: null })
-      },
-
-      signInWithSSO: async (provider, consent) => {
-        if (!isSupabaseConfigured || !get().pendingFlow) return
-        // Set before calling signInWithOAuth, which navigates the browser
-        // away almost immediately — anything set after that call might
-        // never actually run.
-        set({
-          pendingIdentity: { email: null, firstName: consent.firstName, news: consent.news, support: consent.support },
-          authMethod: 'oauth',
-        })
-        await db.signInWithOAuth(provider)
       },
 
       initRealBackend: async () => {

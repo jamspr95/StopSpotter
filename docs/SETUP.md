@@ -148,82 +148,17 @@ actually turning those into Brevo contacts/list members for real
 marketing use is a separate, not-yet-built integration. See **§10a**
 below for what that needs from you.
 
-## 6. Set up Google, Apple and Facebook sign-in (optional)
+## 6. Google/Apple/Facebook sign-in — removed (20 Oct 2026)
 
-**The "Continue with Google / Apple / Facebook" buttons are hidden by
-default** — a tester flagged that they were showing even though no
-provider was actually configured yet, so tapping one just failed. They're
-now gated behind a second flag on top of step 4's backend config:
-
-```
-VITE_SSO_ENABLED=true
-```
-
-Set this in `.env.local` for local development, and for the deployed
-build add it as a repo **variable** (not a secret — it's not sensitive) in
-**Settings → Secrets and variables → Actions → Variables tab**. Do this
-once **at least one** provider below is actually enabled and working.
-Leave it unset/`false` until then — email magic-link keeps working
-regardless either way.
-
-All three use the same Supabase-side redirect URL, which you'll enter on
-the provider's side as the "authorised redirect URI":
-
-```
-https://xxxxx.supabase.co/auth/v1/callback
-```
-
-(Find your own project's version of this on the provider setup page in
-the dashboard: **Authentication → Providers → Google/Apple/Facebook** —
-Supabase shows it there pre-filled with your project ref.)
-
-### Google (easiest — ~10 minutes, free)
-
-1. In the [Google Cloud Console](https://console.cloud.google.com/), create
-   a project (or use an existing one) and go to **APIs & Services →
-   Credentials**.
-2. **Create Credentials → OAuth client ID** → Application type **Web
-   application**.
-3. Under **Authorised redirect URIs**, add the Supabase callback URL above.
-4. Copy the generated **Client ID** and **Client secret**.
-5. In Supabase: **Authentication → Providers → Google**, toggle it on,
-   paste both values, save.
-
-### Facebook / Meta (needs App Review for a public launch)
-
-1. In [Meta for Developers](https://developers.facebook.com/), create an
-   app (type **Consumer**) and add the **Facebook Login** product.
-2. Under **Facebook Login → Settings**, add the Supabase callback URL
-   above to **Valid OAuth Redirect URIs**.
-3. Copy the **App ID** and **App Secret** from **Settings → Basic**.
-4. In Supabase: **Authentication → Providers → Facebook**, toggle it on,
-   paste both values, save.
-5. While the app is in **Development mode**, sign-in only works for
-   accounts added as testers/developers on the Meta app. Going live to the
-   public requires submitting for **App Review** (the `public_profile` and
-   `email` permissions are usually pre-approved, but Meta still has to
-   review the app itself) — budget a few days for this before relying on
-   it for a real launch.
-
-### Apple (needs a paid Apple Developer account)
-
-1. Requires an active [Apple Developer Program](https://developer.apple.com/programs/)
-   membership ($99/year) — there's no free tier for Sign in with Apple.
-2. In the Apple Developer portal: create an **App ID** (with "Sign in with
-   Apple" capability enabled), a **Services ID** (this is the "client ID"
-   Supabase asks for — it's a separate identifier from the App ID), and a
-   **Sign in with Apple** private key.
-3. On the Services ID's configuration, add this project's **domain**
-   (`jamspr95.github.io`, or a custom domain later) and the Supabase
-   callback URL above as the return URL.
-4. Apple also requires **domain verification** — a small file served from
-   `.well-known/` on that domain, which the Apple portal walks you through.
-5. In Supabase: **Authentication → Providers → Apple**, toggle it on,
-   enter the Services ID, Team ID, Key ID, and the private key contents.
-
-Because of the cost and setup time, Apple sign-in is the one most likely
-to be left for later — the Google and email options are enough to launch
-with.
+Google/Apple/Facebook "Continue with…" buttons were built alongside the
+email magic-link, gated behind `VITE_SSO_ENABLED` until at least one
+provider was configured. Removed before any provider was ever actually
+set up: sign-in is email-only (magic link, no password), and offering SSO
+alongside that risked confusing sign-in behaviour — e.g. an email-only
+account and an OAuth-identity account for the same person not matching up.
+There is nothing left to configure here; this step is kept only so the
+section numbering below doesn't shift under existing `§N` references
+elsewhere in this file and in `docs/BUILD_PLAN.md`/`docs/PROJECT_PLAN.md`.
 
 ## 7. Load council boundaries (optional — can come later, admin-only)
 
@@ -412,7 +347,7 @@ Postgres function, but Supabase Auth doesn't call it until you point a
 3. Save.
 
 That's it — no redeploy, no edge function. It covers every sign-up path
-(magic link and every SSO provider you've configured), since it runs
+(there's only the one, magic link), since it runs
 inside Supabase Auth itself before the user row exists. Nothing breaks by
 skipping this step; sign-ups from a disposable address just aren't
 blocked server-side yet (the sign-up form's own client-side check in
@@ -784,7 +719,7 @@ same `wrangler deploy` just works there.)
    - Add `CLOUDFLARE_API_TOKEN` as a **secret**.
    - Add `CLOUDFLARE_ACCOUNT_ID` (from the Cloudflare dashboard's right
      sidebar on any domain/account page) as a **variable**, not a secret —
-     it's not sensitive, same as `VITE_SSO_ENABLED` below.
+     it's not sensitive.
    - Confirm `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` and (if used)
      `VITE_GOOGLE_MAPS_API_KEY` are already set as secrets — `deploy.yml`
      needs these too, so they're likely already there.

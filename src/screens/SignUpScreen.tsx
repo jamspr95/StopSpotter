@@ -3,16 +3,10 @@ import type { NavigateFunction } from 'react-router-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { logEvent } from '../lib/analytics'
-import { DUPLICATE_VOTE_MESSAGE, type SSOProvider } from '../lib/db'
+import { DUPLICATE_VOTE_MESSAGE } from '../lib/db'
 import { isDisposableEmail } from '../lib/disposableEmail'
-import { isSSOEnabled, isSupabaseConfigured } from '../lib/supabaseClient'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useAppStore } from '../store/useAppStore'
-
-const SSO_PROVIDERS: Array<{ id: SSOProvider; label: string }> = [
-  { id: 'google', label: 'Continue with Google' },
-  { id: 'apple', label: 'Continue with Apple' },
-  { id: 'facebook', label: 'Continue with Facebook' },
-]
 
 /**
  * nomination/vote still get the dedicated thank-you page (confetti,
@@ -47,7 +41,6 @@ export function SignUpScreen() {
   const finalizePendingFlow = useAppStore((s) => s.finalizePendingFlow)
   const completePendingFlowAsCurrentUser = useAppStore((s) => s.completePendingFlowAsCurrentUser)
   const confirmMagicLink = useAppStore((s) => s.confirmMagicLink)
-  const signInWithSSO = useAppStore((s) => s.signInWithSSO)
   const cancelPendingFlow = useAppStore((s) => s.cancelPendingFlow)
 
   const [email, setEmail] = useState('')
@@ -69,10 +62,10 @@ export function SignUpScreen() {
   // local-only equivalent), skip this screen's form entirely rather than
   // asking again on every nomination/vote.
   const [alreadySignedInOnMount] = useState(() => currentUser !== null && currentUser.verified)
-  // Real-backend mode: a page reload (the magic-link email click, or the
-  // OAuth provider's redirect back) lands back on this exact route and
-  // remounts this component with authMethod still set from before the
-  // redirect. completePendingSignIn (in the store's auth listener) clears
+  // Real-backend mode: a page reload (the magic-link email click) lands
+  // back on this exact route and remounts this component with authMethod
+  // still set from before the redirect. completePendingSignIn (in the
+  // store's auth listener) clears
   // pendingFlow once it finishes writing — this effect is what notices
   // that and moves on to /done, since nothing else does.
   const [wasAwaitingAuthOnMount] = useState(() => authMethod !== null)
@@ -176,19 +169,6 @@ export function SignUpScreen() {
     }
   }
 
-  async function handleSSO(provider: SSOProvider) {
-    setSubmitting(true)
-    setError(null)
-    try {
-      await signInWithSSO(provider, { firstName: firstName || undefined, news, support })
-      // No navigation here — signInWithOAuth takes the browser to the
-      // provider's consent screen itself; this line may never run.
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
-      setSubmitting(false)
-    }
-  }
-
   if (awaitingVerificationId) {
     return (
       <div className="flex h-dvh flex-col">
@@ -218,8 +198,7 @@ export function SignUpScreen() {
   }
 
   // Real-backend mode, magic link sent — waits for the redirect, same as
-  // above but for real (no simulate button). OAuth has no equivalent
-  // screen: the browser already left for the provider's consent page.
+  // above but for real (no simulate button).
   if (authMethod === 'magic_link') {
     return (
       <div className="flex h-dvh flex-col">
@@ -244,29 +223,6 @@ export function SignUpScreen() {
         }}
       />
       <div className="flex-1 overflow-y-auto p-5">
-        {isSupabaseConfigured && isSSOEnabled && (
-          <>
-            <div className="flex flex-col gap-2">
-              {SSO_PROVIDERS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => handleSSO(p.id)}
-                  className="w-full rounded-xl border border-slate-300 bg-white py-3.5 text-base font-semibold text-slate-800 disabled:opacity-40 active:bg-slate-50"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-medium text-slate-400">OR</span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-          </>
-        )}
-
         <label className="block text-sm font-medium text-slate-700">Email</label>
         <input
           type="email"
