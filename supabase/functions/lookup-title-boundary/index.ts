@@ -3,11 +3,11 @@
 //
 // Given one nomination's coordinates, works out which grid tile it falls
 // in, fetches just that one small pre-built GeoJSON file from the
-// title-tiles-latest GitHub Release (published by
-// jamspr95/stopspotter-title-tiles's build-title-tiles.yml workflow — a
-// separate public repo, not this one; see TILE_BASE_URL below for why),
-// and does a plain point-in-polygon check against whatever parcels that
-// tile contains.
+// matching nation's title-tiles-latest-{ew,scotland} GitHub Release
+// (published by jamspr95/stopspotter-title-tiles's build-title-tiles.yml
+// workflow — a separate public repo, not this one; see tileBaseUrl()
+// below for why), and does a plain point-in-polygon check against
+// whatever parcels that tile contains.
 // Never touches Postgres for the national data — only the admin RPC that
 // calls this (admin_set_nomination_title, 0017_title_lookup_columns.sql)
 // writes the single resolved result back.
@@ -48,7 +48,7 @@ const corsHeaders = {
 // a coarser shard/file-boundary grid) rather than one.
 // ============================================================================
 const CELL_SIZE_DEG = 0.1
-const FINE_CELLS_PER_SHARD = 5
+const FINE_CELLS_PER_SHARD = 2
 
 function cellIdForPoint(lat: number, lng: number): string {
   const latBucket = Math.floor(lat / CELL_SIZE_DEG)
@@ -63,15 +63,26 @@ function shardIdForCellId(cellId: string): string {
   return `${shardLatBucket}_${shardLngBucket}`
 }
 
-const RELEASE_TAG = 'title-tiles-latest'
-// The build pipeline that publishes this release now lives in its own
+// Two separate releases, one per nation — not one combined release — so
+// each stays under GitHub's 1,000-asset-per-release cap once shards
+// shrank to FINE_CELLS_PER_SHARD=2 (see that constant's own comment,
+// and build-title-tiles.yml's "Publish releases" step on the other
+// repo). A combined release at this shard size would land around 1,380
+// assets, over the cap.
+const RELEASE_TAG: Record<'england_wales' | 'scotland', string> = {
+  england_wales: 'title-tiles-latest-ew',
+  scotland: 'title-tiles-latest-scotland',
+}
+// The build pipeline that publishes these releases now lives in its own
 // public repo (jamspr95/stopspotter-title-tiles), split out so it can
 // stay public once this app repo goes private — see that repo's README.
 // A plain unauthenticated fetch like the one below only ever works
 // against a PUBLIC repo's release assets; a private repo's assets need
 // api.github.com + a token instead, which is the whole reason this
 // moved rather than just making this repo private directly.
-const TILE_BASE_URL = `https://github.com/jamspr95/stopspotter-title-tiles/releases/download/${RELEASE_TAG}`
+function tileBaseUrl(nation: 'england_wales' | 'scotland'): string {
+  return `https://github.com/jamspr95/stopspotter-title-tiles/releases/download/${RELEASE_TAG[nation]}`
+}
 
 interface TitleTileLine {
   c: string
@@ -107,9 +118,22 @@ type TitleFeature = Omit<TitleTileLine, 'c'>
 // holding one in-progress line at a time, with a cheap substring check
 // before paying for a full JSON.parse on a line that can't match -
 // peak memory is now one line's worth, not one shard's worth.
+//
+// Second real incident, same day: that fix stopped the memory crash,
+// but the VERY NEXT real attempt failed with "CPU Time exceeded"
+// instead. Measured directly: gzip-DECOMPRESSING that same 186MB shard
+// alone cost ~2.1s of CPU time - Supabase's Edge Functions hard-cap CPU
+// time at 2s per request, and it isn't configurable on the hosted
+// platform (self-hosting only) - so no amount of optimising the loop
+// below could have fixed it; the shard itself was too big to decompress
+// in budget. Real fix was on the OTHER repo's side: FINE_CELLS_PER_SHARD
+// shrank from 5 to 2 there (and here, in lockstep - see that constant's
+// own comment), cutting a shard's decompress cost to a real measured
+// ~336ms, with the release split in two (one per nation) to keep each
+// comfortably under GitHub's 1,000-asset cap at the smaller shard size.
 async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): Promise<TitleFeature[]> {
   const shardId = shardIdForCellId(cellId)
-  const res = await fetch(`${TILE_BASE_URL}/${nation}_${shardId}.json.gz`)
+  const res = await fetch(`${tileBaseUrl(nation)}/${nation}_${shardId}.json.gz`)
   if (res.status === 404) return [] // no parcels in this shard for this nation — normal, not an error
   if (!res.ok) throw new Error(`Failed to fetch shard ${nation}/${shardId}: ${res.status}`)
   if (!res.body) return []
@@ -121,7 +145,7 @@ async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): 
   let buffer = ''
 
   function consumeLine(line: string) {
-    if (!line || !line.includes(needle)) return // cheap pre-check — skip the other ~24 fine cells' lines unparsed
+    if (!line || !line.includes(needle)) return // cheap pre-check — skip the other fine cells' lines unparsed
     const parsed: TitleTileLine = JSON.parse(line)
     if (parsed.c !== cellId) return // the substring check alone could coincidentally match inside other fields
     features.push({ type: parsed.type, properties: parsed.properties, geometry: parsed.geometry })
