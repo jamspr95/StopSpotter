@@ -3,11 +3,11 @@
 //
 // Given one nomination's coordinates, works out which grid tile it falls
 // in, fetches just that one small pre-built GeoJSON file from the
-// matching nation's title-tiles-latest-{ew,scotland} GitHub Release
-// (published by jamspr95/stopspotter-title-tiles's build-title-tiles.yml
-// workflow — a separate public repo, not this one; see tileBaseUrl()
-// below for why), and does a plain point-in-polygon check against
-// whatever parcels that tile contains.
+// matching nation's title-tiles-latest-{ew,scotland}-{0,1,2} GitHub
+// Release (published by jamspr95/stopspotter-title-tiles's
+// build-title-tiles.yml workflow — a separate public repo, not this one;
+// see tileBaseUrl() below for why), and does a plain point-in-polygon
+// check against whatever parcels that tile contains.
 // Never touches Postgres for the national data — only the admin RPC that
 // calls this (admin_set_nomination_title, 0017_title_lookup_columns.sql)
 // writes the single resolved result back.
@@ -40,15 +40,20 @@ const corsHeaders = {
 // ============================================================================
 // Grid math — MUST stay byte-for-byte identical to
 // jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs
-// (CELL_SIZE_DEG/FINE_CELLS_PER_SHARD/cellIdForPoint/shardIdForCellId).
-// They're duplicated (not shared via import) because one runs under Node,
-// in a different repo entirely, and this one under Deno; see that file's
-// own top-of-file comment for why that's a deliberate tradeoff, not an
-// oversight, and for why there are two grid sizes (a fine lookup grid vs.
-// a coarser shard/file-boundary grid) rather than one.
+// (CELL_SIZE_DEG/FINE_CELLS_PER_SHARD/NUM_RELEASE_PARTITIONS/cellIdForPoint/
+// shardIdForCellId/releasePartitionForShardId). They're duplicated (not
+// shared via import) because one runs under Node, in a different repo
+// entirely, and this one under Deno; see that file's own top-of-file
+// comment for why that's a deliberate tradeoff, not an oversight, and for
+// why there are two grid sizes (a fine lookup grid vs. a shard/file-
+// boundary grid) rather than one.
 // ============================================================================
 const CELL_SIZE_DEG = 0.1
-const FINE_CELLS_PER_SHARD = 2
+// Real incident (20 Oct 2026, second round): FINE_CELLS_PER_SHARD=2
+// fixed the TYPICAL lookup but not the real worst case — see
+// fetchTile's own comment below. Dropped to 1 (no shard grouping at all
+// — a shard IS a fine cell) as part of that fix.
+const FINE_CELLS_PER_SHARD = 1
 
 function cellIdForPoint(lat: number, lng: number): string {
   const latBucket = Math.floor(lat / CELL_SIZE_DEG)
@@ -63,16 +68,24 @@ function shardIdForCellId(cellId: string): string {
   return `${shardLatBucket}_${shardLngBucket}`
 }
 
-// Two separate releases, one per nation — not one combined release — so
-// each stays under GitHub's 1,000-asset-per-release cap once shards
-// shrank to FINE_CELLS_PER_SHARD=2 (see that constant's own comment,
-// and build-title-tiles.yml's "Publish releases" step on the other
-// repo). A combined release at this shard size would land around 1,380
-// assets, over the cap.
-const RELEASE_TAG: Record<'england_wales' | 'scotland', string> = {
-  england_wales: 'title-tiles-latest-ew',
-  scotland: 'title-tiles-latest-scotland',
+// FINE_CELLS_PER_SHARD dropping to 1 roughly quadruples the per-nation
+// file count on its own, which on its own would exceed GitHub's
+// 1,000-asset-per-release cap again — so each nation's release now
+// splits further, into NUM_RELEASE_PARTITIONS releases rather than one.
+// Split by the shard's own latitude bucket, modulo the partition count —
+// not a fixed real-world latitude threshold — so this needs no assumption
+// about where a nation's latitude range starts or ends, and spreads
+// adjacent-latitude shards (where real density is often similar — see
+// FINE_CELLS_PER_SHARD's own incident note on where England & Wales'
+// density problem concentrates) across *different* partitions rather
+// than lumping a dense band entirely into one release.
+const NUM_RELEASE_PARTITIONS = 3
+
+function releasePartitionForShardId(shardId: string): number {
+  const [latBucket] = shardId.split('_').map(Number)
+  return ((latBucket % NUM_RELEASE_PARTITIONS) + NUM_RELEASE_PARTITIONS) % NUM_RELEASE_PARTITIONS
 }
+
 // The build pipeline that publishes these releases now lives in its own
 // public repo (jamspr95/stopspotter-title-tiles), split out so it can
 // stay public once this app repo goes private — see that repo's README.
@@ -80,8 +93,10 @@ const RELEASE_TAG: Record<'england_wales' | 'scotland', string> = {
 // against a PUBLIC repo's release assets; a private repo's assets need
 // api.github.com + a token instead, which is the whole reason this
 // moved rather than just making this repo private directly.
-function tileBaseUrl(nation: 'england_wales' | 'scotland'): string {
-  return `https://github.com/jamspr95/stopspotter-title-tiles/releases/download/${RELEASE_TAG[nation]}`
+function tileBaseUrl(nation: 'england_wales' | 'scotland', shardId: string): string {
+  const tagSuffix = nation === 'england_wales' ? 'ew' : 'scotland'
+  const partition = releasePartitionForShardId(shardId)
+  return `https://github.com/jamspr95/stopspotter-title-tiles/releases/download/title-tiles-latest-${tagSuffix}-${partition}`
 }
 
 interface TitleTileLine {
@@ -124,16 +139,31 @@ type TitleFeature = Omit<TitleTileLine, 'c'>
 // instead. Measured directly: gzip-DECOMPRESSING that same 186MB shard
 // alone cost ~2.1s of CPU time - Supabase's Edge Functions hard-cap CPU
 // time at 2s per request, and it isn't configurable on the hosted
-// platform (self-hosting only) - so no amount of optimising the loop
-// below could have fixed it; the shard itself was too big to decompress
-// in budget. Real fix was on the OTHER repo's side: FINE_CELLS_PER_SHARD
-// shrank from 5 to 2 there (and here, in lockstep - see that constant's
-// own comment), cutting a shard's decompress cost to a real measured
-// ~336ms, with the release split in two (one per nation) to keep each
-// comfortably under GitHub's 1,000-asset cap at the smaller shard size.
+// platform (self-hosting only). FINE_CELLS_PER_SHARD shrinking 5->2
+// fixed the TYPICAL shard, but real measurement against the actual
+// rebuilt data found the fix was still incomplete: the densest England &
+// Wales shard (central London) decompressed to 457MB (~5.6s CPU), and
+// the worst Scotland shard - only 1,458 lines, but 240MB decompressed
+// (~16s CPU) - for an entirely different reason: a title registered as
+// hundreds of disjoint scattered parts (e.g. common grazing rights
+// spread across a whole county) was tagged, in full, into every fine
+// cell across the COMBINED bounding box of every part, not just the
+// cells actually near each one.
+//
+// Real (second) fix, same day: FINE_CELLS_PER_SHARD dropped to 1 (no
+// shard grouping at all), and - on the OTHER repo's side -
+// writeParcelsToShardParts now tags and simplifies per RING instead of
+// per whole parcel (see that function's own comment in
+// jamspr95/stopspotter-title-tiles's scripts/lib/titleTiles.mjs for why
+// that's what actually fixed Scotland's outliers, not the shard-size
+// change). Measured directly against the real rebuilt data after both
+// changes: the same worst London fine cell dropped to ~62MB decompressed
+// (~0.9s CPU), and the same worst Scotland shard-area's content dropped
+// by roughly 17x once split per fine cell - both comfortably under the
+// 2s budget with real margin this time, not just the typical case.
 async function fetchTile(nation: 'england_wales' | 'scotland', cellId: string): Promise<TitleFeature[]> {
   const shardId = shardIdForCellId(cellId)
-  const res = await fetch(`${tileBaseUrl(nation)}/${nation}_${shardId}.json.gz`)
+  const res = await fetch(`${tileBaseUrl(nation, shardId)}/${nation}_${shardId}.json.gz`)
   if (res.status === 404) return [] // no parcels in this shard for this nation — normal, not an error
   if (!res.ok) throw new Error(`Failed to fetch shard ${nation}/${shardId}: ${res.status}`)
   if (!res.body) return []
