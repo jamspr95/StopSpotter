@@ -488,12 +488,27 @@ To get candidates into that staging table:
 The "Scan a new area" button on `/admin/site-finder-search` runs
 SiteFinder's own pipeline against a point and radius an admin picks on
 the map, instead of a candidate having to already exist from a prior
-by-hand pipeline run. Click the map to drop a pin, set a radius and
-nation, and submit — it's fire-and-forget (GitHub's `workflow_dispatch`
-API gives no way to poll a run's status), so there's no progress bar:
-the scan runs in the background (minutes to well over an hour,
-depending on radius) and results simply appear in the pending list once
-it finishes, same as any other sync.
+by-hand pipeline run. Click the map to drop a pin, set a radius/nation/
+label, and **Add to batch** — repeat for as many areas as you like (e.g.
+Edinburgh, Glasgow, Linlithgow), then **Run N scans** to dispatch all of
+them together. Each queued area becomes its own independent GitHub
+Actions run, so a batch genuinely runs in parallel, not one area at a
+time. It's fire-and-forget either way (GitHub's `workflow_dispatch` API
+gives no way to poll a run's status), so there's no progress bar: each
+scan runs in the background (minutes to well over an hour, depending on
+radius) and results simply appear in the pending list once it finishes,
+same as any other sync.
+
+**A label becomes that area's folder/filter name** (Jamie, 21 Oct 2026:
+"structured into folders based on search area. Eg. Edinburgh, Glasgow,
+Linlithgow") — SiteFinder's `areas.adhoc_area()` slugifies it into both
+the `data/processed/<key>/` directory name and the synced `area_key`
+(so "Edinburgh" becomes `adhoc-edinburgh`), and the "All areas" filter
+on this screen reads it back the same way a named test area's label
+does. Scanning the same label again later lands in the same
+folder/area_key, by design — a deliberate re-scan, not treated as a
+collision. Leave the label blank for a quick one-off point and it falls
+back to a coordinate-based key instead.
 
 **One real limitation, by design** (Jamie: "SF sites should feed through
 to SS database for boundary lookup"): an on-demand scan only finds sites
@@ -514,9 +529,10 @@ needed for that at all.
 configured, the scan button just works.
 
 How it fits together:
-1. The button calls this project's `trigger-site-finder-scan` Edge
-   Function, which dispatches SiteFinder's `scan-on-demand.yml`
-   `workflow_dispatch` with the chosen point/radius/nation/label.
+1. **Run N scans** calls this project's `trigger-site-finder-scan` Edge
+   Function once per queued area, each dispatching its own instance of
+   SiteFinder's `scan-on-demand.yml` `workflow_dispatch` with that
+   area's point/radius/nation/label.
 2. That workflow runs `scripts/run_pipeline.py --lat ... --lng ...
    --radius-km ... --nation ... --stopspotter-raw-export`, then syncs
    the result straight into `site_finder_raw_candidates` via

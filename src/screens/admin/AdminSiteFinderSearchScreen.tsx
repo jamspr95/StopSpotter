@@ -3,7 +3,7 @@ import { GeoJSON, MapContainer, Marker, useMapEvents } from 'react-leaflet'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
 import { SiteExplorer } from '../../components/SiteExplorer'
 import { formatEnumLabel } from '../../lib/labels'
-import { useAdminStore } from '../../store/useAdminStore'
+import { useAdminStore, type ScanAreaParams } from '../../store/useAdminStore'
 import type { LatLng, OwnerType } from '../../types'
 
 // Roughly the centre of Great Britain, zoomed out enough to see the
@@ -41,7 +41,7 @@ export function AdminSiteFinderSearchScreen() {
   const loadCandidates = useAdminStore((s) => s.loadSiteFinderRawCandidates)
   const approve = useAdminStore((s) => s.approveSiteFinderCandidate)
   const reject = useAdminStore((s) => s.rejectSiteFinderCandidate)
-  const scanNewArea = useAdminStore((s) => s.scanNewArea)
+  const scanNewAreas = useAdminStore((s) => s.scanNewAreas)
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
   const [areaFilter, setAreaFilter] = useState('all')
@@ -54,6 +54,7 @@ export function AdminSiteFinderSearchScreen() {
   const [scanRadiusKm, setScanRadiusKm] = useState('2')
   const [scanNation, setScanNation] = useState<'england' | 'wales' | 'scotland'>('england')
   const [scanLabel, setScanLabel] = useState('')
+  const [scanQueue, setScanQueue] = useState<ScanAreaParams[]>([])
   const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -102,27 +103,38 @@ export function AdminSiteFinderSearchScreen() {
     await reject(id, reason || undefined)
   }
 
-  async function handleRequestScan() {
+  function handleAddToBatch() {
     if (!scanPoint) return
     const radiusKm = Number(scanRadiusKm)
     if (!Number.isFinite(radiusKm) || radiusKm <= 0) return
+    setScanQueue((q) => [
+      ...q,
+      { lat: scanPoint.lat, lng: scanPoint.lng, radiusKm, nation: scanNation, label: scanLabel || undefined },
+    ])
+    // Point and label are per-area; radius/nation are left as-is since
+    // nearby areas often share both (e.g. a run of Scotland towns at the
+    // same default radius).
+    setScanPoint(null)
+    setScanLabel('')
+  }
+
+  function removeFromBatch(index: number) {
+    setScanQueue((q) => q.filter((_, i) => i !== index))
+  }
+
+  async function handleRunBatch() {
+    if (scanQueue.length === 0) return
     setScanMessage(null)
-    try {
-      await scanNewArea({
-        lat: scanPoint.lat,
-        lng: scanPoint.lng,
-        radiusKm,
-        nation: scanNation,
-        label: scanLabel || undefined,
-      })
+    const { succeeded, failed } = await scanNewAreas(scanQueue)
+    setScanQueue([])
+    if (failed === 0) {
       setScanMessage(
-        'Scan requested — SiteFinder is working on it in the background. This can take anywhere ' +
-          'from a few minutes to over an hour depending on the radius; check back later and refresh ' +
-          'the pending list.',
+        `${succeeded} scan${succeeded === 1 ? '' : 's'} requested — SiteFinder is working on ` +
+          'them in the background, each as its own run. This can take anywhere from a few minutes ' +
+          'to over an hour per area depending on radius; check back later and refresh the pending list.',
       )
-      setScanPoint(null)
-    } catch {
-      // store already captured the error in `error`, shown below
+    } else {
+      setScanMessage(`${succeeded} scan(s) requested, ${failed} failed to dispatch — see the error below.`)
     }
   }
 
@@ -149,10 +161,12 @@ export function AdminSiteFinderSearchScreen() {
           <div className="mt-3 rounded-xl bg-white p-4 shadow-sm">
             <p className="text-sm font-semibold text-slate-900">Scan a new area</p>
             <p className="mt-1 text-xs text-slate-500">
-              Click the map to drop a pin, pick a radius and nation, then request a scan. SiteFinder
-              only finds sites with a named public owner this way (not unregistered land) — approved
-              candidates can still get a real title lookup once they're a nomination. This runs in the
-              background; results appear in the pending list once it finishes.
+              Click the map to drop a pin, pick a radius and nation, label it (e.g. "Edinburgh"), and
+              add it to the batch below — add as many areas as you like, then run them all at once,
+              each as its own background job. A label becomes that area's folder/filter name, so
+              scanning "Edinburgh" again later lands in the same place. SiteFinder only finds sites
+              with a named public owner this way (not unregistered land) — approved candidates can
+              still get a real title lookup once they're a nomination.
             </p>
 
             <div className="mt-3 h-56 overflow-hidden rounded-lg border border-slate-200">
@@ -204,19 +218,52 @@ export function AdminSiteFinderSearchScreen() {
                   type="text"
                   value={scanLabel}
                   onChange={(e) => setScanLabel(e.target.value)}
-                  placeholder="e.g. Leith docks"
+                  placeholder="e.g. Edinburgh"
                   className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm"
                 />
               </div>
               <button
                 type="button"
-                disabled={!scanPoint || scanning}
-                onClick={() => void handleRequestScan()}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                disabled={!scanPoint}
+                onClick={handleAddToBatch}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
               >
-                {scanning ? 'Requesting…' : 'Request scan'}
+                + Add to batch
               </button>
             </div>
+
+            {scanQueue.length > 0 && (
+              <ul className="mt-3 flex flex-col gap-1.5 rounded-lg bg-slate-50 p-2">
+                {scanQueue.map((entry, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 text-sm text-slate-700">
+                    <span className="min-w-0 truncate">
+                      {entry.label || `${entry.lat.toFixed(4)}, ${entry.lng.toFixed(4)}`}
+                      <span className="ml-2 text-xs text-slate-400">
+                        {entry.radiusKm}km · {formatEnumLabel(entry.nation)}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFromBatch(i)}
+                      className="flex-shrink-0 text-xs font-semibold text-slate-400 hover:text-slate-600"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button
+              type="button"
+              disabled={scanQueue.length === 0 || scanning}
+              onClick={() => void handleRunBatch()}
+              className="mt-3 w-full rounded-lg bg-brand-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {scanning
+                ? 'Requesting…'
+                : `Run ${scanQueue.length} scan${scanQueue.length === 1 ? '' : 's'}`}
+            </button>
 
             {scanMessage && <p className="mt-3 text-sm text-emerald-700">{scanMessage}</p>}
           </div>

@@ -53,13 +53,15 @@ interface AdminState {
   loadSiteFinderRawCandidates: (status?: 'pending' | 'approved' | 'rejected' | null) => Promise<void>
   approveSiteFinderCandidate: (rawId: string) => Promise<void>
   rejectSiteFinderCandidate: (rawId: string, reason?: string) => Promise<void>
-  scanNewArea: (params: {
-    lat: number
-    lng: number
-    radiusKm: number
-    nation: 'england' | 'wales' | 'scotland'
-    label?: string
-  }) => Promise<void>
+  scanNewAreas: (entries: ScanAreaParams[]) => Promise<{ succeeded: number; failed: number }>
+}
+
+export interface ScanAreaParams {
+  lat: number
+  lng: number
+  radiusKm: number
+  nation: 'england' | 'wales' | 'scotland'
+  label?: string
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -286,17 +288,24 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     }
   },
 
-  scanNewArea: async (params) => {
+  // Fires every queued area's scan request together (Jamie, 21 Oct 2026:
+  // "run multiple searches at once") — each becomes its own independent
+  // GitHub Actions run, so they actually run in parallel rather than one
+  // after another. Promise.allSettled so one bad request (e.g. a
+  // malformed entry) doesn't stop the rest from being dispatched.
+  scanNewAreas: async (entries) => {
     set({ siteFinderScanning: true, error: null })
-    try {
-      await db.triggerSiteFinderScan(params)
-      set({ siteFinderScanning: false })
-    } catch (err) {
-      set({
-        siteFinderScanning: false,
-        error: err instanceof Error ? err.message : 'Failed to request a scan.',
-      })
-      throw err
-    }
+    const results = await Promise.allSettled(entries.map((params) => db.triggerSiteFinderScan(params)))
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    set({
+      siteFinderScanning: false,
+      error:
+        failures.length > 0
+          ? `${failures.length} of ${entries.length} scan request(s) failed: ${failures
+              .map((f) => (f.reason instanceof Error ? f.reason.message : String(f.reason)))
+              .join('; ')}`
+          : null,
+    })
+    return { succeeded: entries.length - failures.length, failed: failures.length }
   },
 }))
