@@ -483,6 +483,54 @@ To get candidates into that staging table:
    `pending`/`approved`/`rejected` status, so re-syncing is always safe to
    do on a schedule or by hand, same spirit as §12a's settings sync.
 
+### 12c. Scan a new area on demand (Jamie, 21 Oct 2026)
+
+The "Scan a new area" button on `/admin/site-finder-search` runs
+SiteFinder's own pipeline against a point and radius an admin picks on
+the map, instead of a candidate having to already exist from a prior
+by-hand pipeline run. Click the map to drop a pin, set a radius and
+nation, and submit — it's fire-and-forget (GitHub's `workflow_dispatch`
+API gives no way to poll a run's status), so there's no progress bar:
+the scan runs in the background (minutes to well over an hour,
+depending on radius) and results simply appear in the pending list once
+it finishes, same as any other sync.
+
+**One real limitation, by design** (Jamie: "SF sites should feed through
+to SS database for boundary lookup"): an on-demand scan only finds sites
+with a NAMED public owner (council, government estate, NHS, MOD, Crown
+Estate, rail/roads, waterways, forestry, higher education) — not
+genuinely unregistered land. SiteFinder's own unregistered-land detection
+needs an area-specific council/county boundary list that only exists for
+its 3 hardcoded test areas; rather than build that out for arbitrary
+points, an approved candidate from an on-demand scan can still get a
+real title/boundary from this project's own nationwide "Look up title"
+button (§15) once it's a nomination — no SiteFinder-side area config
+needed for that at all.
+
+**No new setup needed** — this reuses the exact same
+`GITHUB_PAT_SITE_FINDER_SYNC` Edge Function secret and
+`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` SiteFinder repo secrets as
+§12a's settings sync and §12's import flow. If those are already
+configured, the scan button just works.
+
+How it fits together:
+1. The button calls this project's `trigger-site-finder-scan` Edge
+   Function, which dispatches SiteFinder's `scan-on-demand.yml`
+   `workflow_dispatch` with the chosen point/radius/nation/label.
+2. That workflow runs `scripts/run_pipeline.py --lat ... --lng ...
+   --radius-km ... --nation ... --stopspotter-raw-export`, then syncs
+   the result straight into `site_finder_raw_candidates` via
+   `scripts/sync_raw_candidates_to_stopspotter.py` (a Python port of
+   `scripts/sync-sitefinder-raw-candidates.mjs`'s own upsert — kept as a
+   separate implementation so the workflow doesn't need to check out
+   this repo too; see that script's own header comment).
+3. From there it's identical to any other synced candidate — review,
+   approve, or reject from `/admin/site-finder-search` as normal.
+
+You can also trigger `scan-on-demand.yml` by hand from SiteFinder's own
+Actions tab (useful for a one-off trial without touching this UI) —
+same workflow, same inputs.
+
 ## 13. Pannable satellite + Street View on admin screens (optional, free)
 
 The swipe-review queue (`/admin/review`) and the full stop-detail screen

@@ -27,6 +27,7 @@ interface AdminState {
   siteFinderRawCandidates: SiteFinderRawCandidate[]
   siteFinderRawCandidatesLoading: boolean
   siteFinderApprovingId: string | null
+  siteFinderScanning: boolean
   error: string | null
 
   checkSession: () => Promise<void>
@@ -52,6 +53,13 @@ interface AdminState {
   loadSiteFinderRawCandidates: (status?: 'pending' | 'approved' | 'rejected' | null) => Promise<void>
   approveSiteFinderCandidate: (rawId: string) => Promise<void>
   rejectSiteFinderCandidate: (rawId: string, reason?: string) => Promise<void>
+  scanNewArea: (params: {
+    lat: number
+    lng: number
+    radiusKm: number
+    nation: 'england' | 'wales' | 'scotland'
+    label?: string
+  }) => Promise<void>
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
@@ -69,6 +77,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   siteFinderRawCandidates: [],
   siteFinderRawCandidatesLoading: false,
   siteFinderApprovingId: null,
+  siteFinderScanning: false,
   error: null,
 
   checkSession: async () => {
@@ -274,6 +283,20 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         siteFinderApprovingId: null,
         error: err instanceof Error ? err.message : 'Failed to reject this candidate.',
       })
+    }
+  },
+
+  scanNewArea: async (params) => {
+    set({ siteFinderScanning: true, error: null })
+    try {
+      await db.triggerSiteFinderScan(params)
+      set({ siteFinderScanning: false })
+    } catch (err) {
+      set({
+        siteFinderScanning: false,
+        error: err instanceof Error ? err.message : 'Failed to request a scan.',
+      })
+      throw err
     }
   },
 }))

@@ -930,3 +930,26 @@ export async function adminRejectSiteFinderCandidate(rawId: string, reason?: str
   })
   if (error) throw error
 }
+
+/**
+ * "Scan a new area" — dispatches SiteFinder's scan-on-demand.yml for one
+ * ad-hoc point instead of its hardcoded test areas (trigger-site-finder-scan
+ * Edge Function). Fire-and-forget, same as triggerSiteFinderSync: this
+ * only confirms GitHub accepted the request — results land in the
+ * pending list once the scan itself finishes, which can take anywhere
+ * from minutes to over an hour depending on radius.
+ */
+export async function triggerSiteFinderScan(params: {
+  lat: number
+  lng: number
+  radiusKm: number
+  nation: 'england' | 'wales' | 'scotland'
+  label?: string
+}): Promise<void> {
+  const { data, error } = await client().functions.invoke<{ dispatched?: boolean; error?: string }>(
+    'trigger-site-finder-scan',
+    { method: 'POST', body: params },
+  )
+  if (error) throw error
+  if (!data?.dispatched) throw new Error(data?.error ?? 'Scan request was not accepted.')
+}

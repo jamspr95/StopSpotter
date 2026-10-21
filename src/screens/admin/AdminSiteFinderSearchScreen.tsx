@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { GeoJSON, MapContainer, Marker } from 'react-leaflet'
+import { GeoJSON, MapContainer, Marker, useMapEvents } from 'react-leaflet'
 import { MapTiles, SatelliteToggle } from '../../components/MapTiles'
 import { SiteExplorer } from '../../components/SiteExplorer'
 import { formatEnumLabel } from '../../lib/labels'
 import { useAdminStore } from '../../store/useAdminStore'
-import type { OwnerType } from '../../types'
+import type { LatLng, OwnerType } from '../../types'
+
+// Roughly the centre of Great Britain, zoomed out enough to see the
+// whole country — the scan-picker map's starting view before an admin
+// clicks a point, not any real site's location.
+const UK_CENTRE: LatLng = { lat: 54.5, lng: -3.5 }
+
+function ScanPointPicker({ onPick }: { onPick: (point: LatLng) => void }) {
+  useMapEvents({ click: (e) => onPick({ lat: e.latlng.lat, lng: e.latlng.lng }) })
+  return null
+}
 
 /**
  * Replaces SiteFinder's own standalone web/app.py map+review — one portal
@@ -26,16 +36,25 @@ export function AdminSiteFinderSearchScreen() {
   const candidates = useAdminStore((s) => s.siteFinderRawCandidates)
   const loading = useAdminStore((s) => s.siteFinderRawCandidatesLoading)
   const approvingId = useAdminStore((s) => s.siteFinderApprovingId)
+  const scanning = useAdminStore((s) => s.siteFinderScanning)
   const error = useAdminStore((s) => s.error)
   const loadCandidates = useAdminStore((s) => s.loadSiteFinderRawCandidates)
   const approve = useAdminStore((s) => s.approveSiteFinderCandidate)
   const reject = useAdminStore((s) => s.rejectSiteFinderCandidate)
+  const scanNewArea = useAdminStore((s) => s.scanNewArea)
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
   const [areaFilter, setAreaFilter] = useState('all')
   const [ownerFilter, setOwnerFilter] = useState<Set<OwnerType>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [satellite, setSatellite] = useState(false)
+
+  const [scanPanelOpen, setScanPanelOpen] = useState(false)
+  const [scanPoint, setScanPoint] = useState<LatLng | null>(null)
+  const [scanRadiusKm, setScanRadiusKm] = useState('2')
+  const [scanNation, setScanNation] = useState<'england' | 'wales' | 'scotland'>('england')
+  const [scanLabel, setScanLabel] = useState('')
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
 
   useEffect(() => {
     void loadCandidates(statusFilter)
@@ -83,6 +102,30 @@ export function AdminSiteFinderSearchScreen() {
     await reject(id, reason || undefined)
   }
 
+  async function handleRequestScan() {
+    if (!scanPoint) return
+    const radiusKm = Number(scanRadiusKm)
+    if (!Number.isFinite(radiusKm) || radiusKm <= 0) return
+    setScanMessage(null)
+    try {
+      await scanNewArea({
+        lat: scanPoint.lat,
+        lng: scanPoint.lng,
+        radiusKm,
+        nation: scanNation,
+        label: scanLabel || undefined,
+      })
+      setScanMessage(
+        'Scan requested — SiteFinder is working on it in the background. This can take anywhere ' +
+          'from a few minutes to over an hour depending on the radius; check back later and refresh ' +
+          'the pending list.',
+      )
+      setScanPoint(null)
+    } catch {
+      // store already captured the error in `error`, shown below
+    }
+  }
+
   return (
     <div>
       <h2 className="font-display text-lg font-semibold text-slate-900">SiteFinder search</h2>
@@ -92,6 +135,93 @@ export function AdminSiteFinderSearchScreen() {
         the normal admin review queue; reject to dismiss it without deleting anything SiteFinder
         produced.
       </p>
+
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setScanPanelOpen((open) => !open)}
+          className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white"
+        >
+          {scanPanelOpen ? 'Hide scan panel' : 'Scan a new area'}
+        </button>
+
+        {scanPanelOpen && (
+          <div className="mt-3 rounded-xl bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold text-slate-900">Scan a new area</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Click the map to drop a pin, pick a radius and nation, then request a scan. SiteFinder
+              only finds sites with a named public owner this way (not unregistered land) — approved
+              candidates can still get a real title lookup once they're a nomination. This runs in the
+              background; results appear in the pending list once it finishes.
+            </p>
+
+            <div className="mt-3 h-56 overflow-hidden rounded-lg border border-slate-200">
+              <MapContainer
+                center={scanPoint ?? UK_CENTRE}
+                zoom={scanPoint ? 11 : 6}
+                className="h-full w-full"
+                zoomControl={false}
+              >
+                <MapTiles satellite={false} />
+                <ScanPointPicker onPick={setScanPoint} />
+                {scanPoint && <Marker position={scanPoint} />}
+              </MapContainer>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Point</label>
+                <p className="mt-1 text-sm text-slate-700">
+                  {scanPoint ? `${scanPoint.lat.toFixed(4)}, ${scanPoint.lng.toFixed(4)}` : 'Click the map'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Radius (km)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={scanRadiusKm}
+                  onChange={(e) => setScanRadiusKm(e.target.value)}
+                  className="mt-1 w-24 rounded-lg border border-slate-200 p-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500">Nation</label>
+                <select
+                  value={scanNation}
+                  onChange={(e) => setScanNation(e.target.value as typeof scanNation)}
+                  className="mt-1 rounded-lg border border-slate-200 p-2 text-sm"
+                >
+                  <option value="england">England</option>
+                  <option value="wales">Wales</option>
+                  <option value="scotland">Scotland</option>
+                </select>
+              </div>
+              <div className="min-w-[160px] flex-1">
+                <label className="block text-xs font-medium text-slate-500">Label (optional)</label>
+                <input
+                  type="text"
+                  value={scanLabel}
+                  onChange={(e) => setScanLabel(e.target.value)}
+                  placeholder="e.g. Leith docks"
+                  className="mt-1 w-full rounded-lg border border-slate-200 p-2 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={!scanPoint || scanning}
+                onClick={() => void handleRequestScan()}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {scanning ? 'Requesting…' : 'Request scan'}
+              </button>
+            </div>
+
+            {scanMessage && <p className="mt-3 text-sm text-emerald-700">{scanMessage}</p>}
+          </div>
+        )}
+      </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <div className="flex overflow-hidden rounded-full bg-white text-xs font-medium shadow-sm">
